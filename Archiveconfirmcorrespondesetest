@@ -1,0 +1,129 @@
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class ArchiveConfirmCorrespondenceServiceTest {
+
+    @Mock
+    private ArchiveDocsRestService archiveDocsRestService;
+
+    @Mock
+    private RequestService requestService;
+
+    @Mock
+    private ClientParticipantInfoCache clientParticipantInfoCache;
+
+    @Mock
+    private SetItPullClientCache setItPullClientCache;
+
+    @Mock
+    private Executor correspondenceExecutor;
+
+    @InjectMocks
+    private ArchiveConfirmCorrespondenceService archiveConfirmCorrespondenceService;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testGetCorrespondenceDocs_whenPlansExist() {
+        // Mock input data
+        Map<String, String> reqHeadersMap = new HashMap<>();
+        reqHeadersMap.put("Authorization", "Bearer mockToken");
+        PartyInfo partyInfo = PartyInfo.builder().partyId("12345").ssn("111-22-3333").clientId("client1").build();
+
+        // Mock RequestService behavior
+        Map<String, String> preAuthHeadersMap = Map.of("key", "value");
+        when(requestService.getPreAuthHeadersMap(reqHeadersMap)).thenReturn(preAuthHeadersMap);
+
+        Party party = Party.builder().partyId(partyInfo.getPartyId()).pptId(partyInfo.getSsn()).build();
+        List<Account> accountsList = List.of(
+                Account.builder().planType("SAVINGS").voyaAccessPlan(false).planId("plan1").build()
+        );
+        when(requestService.getAccountsList(party, preAuthHeadersMap)).thenReturn(accountsList);
+
+        // Mock filterPlans
+        List<Plan> filteredPlans = List.of(
+                Plan.builder().planId("plan1").build()
+        );
+        doReturn(filteredPlans).when(archiveConfirmCorrespondenceService).filterPlans(anyList(), anyMap());
+
+        // Mock ArchiveDocsRestService behavior
+        ArchiveDocsInfo docInfo = ArchiveDocsInfo.builder().docName("Test Doc").build();
+        CompletableFuture<List<ArchiveDocsInfo>> future = CompletableFuture.completedFuture(List.of(docInfo));
+        when(archiveDocsRestService.getEaseCorrespondenceDocList(anyString(), any(Plan.class), anyBoolean())).thenReturn(future.join());
+
+        // Execute method
+        CorrespondenceResponse response = archiveConfirmCorrespondenceService.getCorrespondenceDocs(reqHeadersMap, partyInfo);
+
+        // Verify
+        assertNotNull(response);
+        assertEquals(1, response.getArchiveDocsInfos().size());
+        assertEquals("Test Doc", response.getArchiveDocsInfos().get(0).getDocName());
+    }
+
+    @Test
+    void testGetCorrespondenceDocs_whenNoPlansExist() {
+        // Mock input data
+        Map<String, String> reqHeadersMap = new HashMap<>();
+        PartyInfo partyInfo = PartyInfo.builder().partyId("12345").ssn("111-22-3333").clientId("client1").build();
+
+        // Mock RequestService behavior
+        when(requestService.getPreAuthHeadersMap(reqHeadersMap)).thenReturn(Collections.emptyMap());
+        when(requestService.getAccountsList(any(), any())).thenReturn(Collections.emptyList());
+
+        // Execute method
+        CorrespondenceResponse response = archiveConfirmCorrespondenceService.getCorrespondenceDocs(reqHeadersMap, partyInfo);
+
+        // Verify
+        assertNotNull(response);
+        assertTrue(response.getArchiveDocsInfos().isEmpty());
+    }
+
+    @Test
+    void testSetPlanLvlBrandFlg_whenPlanExists() {
+        // Mock input data
+        PartyInfo partyInfo = PartyInfo.builder().clientId("client1").ssn("111-22-3333").build();
+
+        // Mock ClientParticipantInfoCache behavior
+        when(clientParticipantInfoCache.getAllPlansByClientParticipantControlType(anyString(), anyString(), any()))
+                .thenReturn(List.of("plan1"));
+
+        // Mock SetItPullClientCache behavior
+        PlanGeneralInfo planGeneralInfo = PlanGeneralInfo.builder().usePlanLevelCustomBranding("Y").build();
+        when(setItPullClientCache.getSetItPlanGeneralInfo(any())).thenReturn(planGeneralInfo);
+
+        // Execute method
+        boolean result = archiveConfirmCorrespondenceService.setPlanLvlBrandFlg(partyInfo);
+
+        // Verify
+        assertTrue(result);
+    }
+
+    @Test
+    void testSetPlanLvlBrandFlg_whenNoPlansExist() {
+        // Mock input data
+        PartyInfo partyInfo = PartyInfo.builder().clientId("client1").ssn("111-22-3333").build();
+
+        // Mock ClientParticipantInfoCache behavior
+        when(clientParticipantInfoCache.getAllPlansByClientParticipantControlType(anyString(), anyString(), any()))
+                .thenReturn(Collections.emptyList());
+
+        // Execute method
+        boolean result = archiveConfirmCorrespondenceService.setPlanLvlBrandFlg(partyInfo);
+
+        // Verify
+        assertFalse(result);
+    }
+}
