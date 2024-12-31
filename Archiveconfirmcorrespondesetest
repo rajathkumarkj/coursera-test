@@ -26,7 +26,22 @@ class CorrespondenceControllerTest {
         HttpHeaders httpHeaders = new HttpHeaders();
         httpHeaders.add("Authorization", "Bearer token");
 
-        CorrespondenceResponse mockResponse = new CorrespondenceResponse(); // Assuming a no-arg constructor exists
+        // Create mock lists
+        List<MailInfo> mailInfos = List.of(new MailInfo("mailId", "mailSubject", "mailBody"));
+        List<ComboCorresInfo> comboCorresInfos = List.of(new ComboCorresInfo("comboId", "comboDetails"));
+        List<ArchiveDocsInfo> archiveDocsInfos = List.of(new ArchiveDocsInfo("archiveId", "archiveDetails"));
+
+        // Build a mock CorrespondenceResponse
+        CorrespondenceResponse mockResponse = CorrespondenceResponse.builder()
+                .mailInfos(mailInfos)
+                .comboCorresInfos(comboCorresInfos)
+                .archiveDocsInfos(archiveDocsInfos)
+                .correspondenceText("Sample Correspondence")
+                .usePlanLvlBrand(true)
+                .statementBulletPoints("Sample Bullet Points")
+                .confirmSourceType(ConfirmSourceType.MANUAL)
+                .build();
+
         when(correspondenceService.getCorrespondenceDocs(httpHeaders.toSingleValueMap())).thenReturn(mockResponse);
 
         // Execute
@@ -63,7 +78,9 @@ class CorrespondenceControllerTest {
         // Mock input
         String messageId = "12345";
         String documentId = "67890";
-        DocumentData mockDocumentData = new DocumentData(); // Assuming a no-arg constructor exists
+
+        // Create a mock DocumentData object
+        DocumentData mockDocumentData = new DocumentData("dataId", "contentType", new byte[0]);
 
         // Mock behavior
         when(mailDocumentService.getDocument(messageId, documentId)).thenReturn(mockDocumentData);
