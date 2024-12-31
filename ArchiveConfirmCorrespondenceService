@@ -1,21 +1,95 @@
-public class CorrespondenceController {
+public class MailPreferencesDAO {
 
-    private final CorrespondenceService correspondenceService;
-    private final MailDocumentService mailDocumentService;
+    private final WebServiceTemplate webServiceTemplate;
+    private final String mailServiceUrl;
 
-    CorrespondenceController(final CorrespondenceService correspondenceService, MailDocumentService mailDocumentService) {
-        this.correspondenceService = correspondenceService;
-        this.mailDocumentService = mailDocumentService;
+
+    protected HttpServletResponse response;
+
+    private String msgId;
+
+    /* MailIT document document id */
+    private String docId;
+
+    public String getMsgId() {
+        return this.msgId;
+    }
+    public void setMsgId(String msgId) {
+        this.msgId = msgId;
     }
 
-    @GetMapping("/correspondence")
-    public CorrespondenceResponse getCorrespondenceDoc(@RequestHeader HttpHeaders httpHeaders) {
-        log.info("http headers {}", httpHeaders.toSingleValueMap());
-        return correspondenceService.getCorrespondenceDocs(httpHeaders.toSingleValueMap());
+    public String getDocId() {
+        return this.docId;
+    }
+    public void setDocId(String docId) {
+        this.docId = docId;
     }
 
-    @PostMapping("/mailit")
-    public DocumentData getDocumentData(@RequestParam("messageId") String messageId, @RequestParam("documentId") String documentId) throws IOException {
-        return mailDocumentService.getDocument(messageId, documentId);
+    public MailPreferencesDAO(WebServiceTemplate webServiceTemplate, @Value("${cbc.mailservice.url}") String mailServiceUrl,HttpServletResponse response) {
+        this.webServiceTemplate = webServiceTemplate;
+        this.mailServiceUrl = mailServiceUrl;
+        this.response=response;
+    }
+
+    public DocumentData getDocument(String messageId, String documentId, String updateId) throws IOException {
+        if (messageId == null || messageId.length() <= 0) {
+            throw new IllegalArgumentException("messageId");
+        }
+        if (documentId == null || documentId.length() <= 0) {
+            throw new IllegalArgumentException("documentId");
+        }
+        if (updateId == null || updateId.length() <= 0) {
+            throw new IllegalArgumentException("updateId");
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug("Entering MailServices.getMailMessage(), input messageId: {0} input documentId: {1} input updateId: {2}", messageId, documentId, updateId);
+        }
+        ObjectFactory objectFactory = new ObjectFactory();
+        DocumentData docData = null;
+        try {
+            DocumentRequest documentrequest = new DocumentRequest();
+            documentrequest.setMessageId(messageId);
+            documentrequest.setDocumentId(documentId);
+            documentrequest.setUpdateId(updateId);
+
+
+            JAXBElement<DocumentData> documentDataJAXBElement = (JAXBElement<DocumentData>) webServiceTemplate.marshalSendAndReceive(mailServiceUrl,
+                    objectFactory.createDocumentRequest(documentrequest));
+
+            docData = documentDataJAXBElement.getValue();
+            log.debug("Entering MailServices.getMailMessage(), input messageId: {0} input documentId: {1} input updateId: {2}", messageId, documentId, updateId);
+
+        }
+        catch (Exception error) {
+            throw new RuntimeException(error);
+        }
+            byte[] mailinbyte = docData.getData();
+
+            ServletOutputStream sos = null;
+            try
+            {
+                sos = response.getOutputStream();
+
+                if (log.isDebugEnabled()) {
+                    log.debug("execute: msgId | docId | data = " + msgId + " | " + docId + " | " + mailinbyte);
+                }
+                if (mailinbyte!=null && mailinbyte.length > 0) {
+                    response.reset();
+                    response.setHeader("Disposition", "attachment; filename=myDoc.pdf");
+                    response.setContentType(docData.getMimetype());
+                    response.setContentLength(mailinbyte.length);
+
+                    sos.write(mailinbyte);
+                } else {
+                    sos.print("No Data");
+                }
+            } finally {
+                if (sos != null) {
+                    sos.flush();
+                    sos.close();
+                }
+            }
+        return docData;
     }
 }
