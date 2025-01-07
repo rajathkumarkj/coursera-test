@@ -1,69 +1,66 @@
 @Test
-void testFilterPlans_WithValidPlanIds_ReturnsFilteredPlans() {
-    // Mock input data
+void testFilterPlans_WithMatchingPlans_ReturnsFilteredList() {
+    // Input data
     Map<String, String> preAuthHeadersMap = Map.of(
-        "UC_VENDOR_ID", "SPSRWB",
-        "UC_PLAN_ID_LIST", "plan1,plan2"
+        CrspConstants.UC_VENDOR_ID, CrspConstants.SPSRWB,
+        CrspConstants.UC_PLAN_ID_LIST, "plan1,plan2"
     );
     String clientId = "client123";
 
-    // Create sample DocumentInfo and MailInfo
-    DocumentInfo doc1 = new DocumentInfo("plan1"); // Matching plan
-    DocumentInfo doc2 = new DocumentInfo("plan3"); // Non-matching plan
-    MailInfo mailInfo = new MailInfo(Arrays.asList(doc1, doc2)); // MailInfo contains both
+    DocumentInfo document1 = new DocumentInfo("plan1");
+    DocumentInfo document2 = new DocumentInfo("plan3"); // Not in UC_PLAN_ID_LIST
+    MailInfo mailInfo = new MailInfo(Arrays.asList(document1, document2));
 
     List<MailInfo> mailInfoList = List.of(mailInfo);
 
     // Call the method
     List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
 
-    // Verify the result
+    // Assertions
     assertNotNull(result);
-    assertEquals(1, result.size()); // One MailInfo remains
+    assertEquals(1, result.size()); // One MailInfo object remains
     assertEquals(1, result.get(0).getDocumentInfo().size()); // Only one DocumentInfo remains
     assertEquals("plan1", result.get(0).getDocumentInfo().get(0).getPlanId());
 }
 
 @Test
 void testFilterPlans_WithNoMatchingPlans_ReturnsEmptyList() {
-    // Mock input data
+    // Input data
     Map<String, String> preAuthHeadersMap = Map.of(
-        "UC_VENDOR_ID", "SPSRWB",
-        "UC_PLAN_ID_LIST", "plan3"
+        CrspConstants.UC_VENDOR_ID, CrspConstants.SPSRWB,
+        CrspConstants.UC_PLAN_ID_LIST, "plan3"
     );
     String clientId = "client123";
 
-    // Create sample DocumentInfo and MailInfo
-    DocumentInfo doc1 = new DocumentInfo("plan1"); // Non-matching plan
-    MailInfo mailInfo = new MailInfo(Collections.singletonList(doc1));
+    DocumentInfo document1 = new DocumentInfo("plan1"); // Not in UC_PLAN_ID_LIST
+    MailInfo mailInfo = new MailInfo(Collections.singletonList(document1));
 
     List<MailInfo> mailInfoList = List.of(mailInfo);
 
     // Call the method
     List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
 
-    // Verify the result
+    // Assertions
     assertNotNull(result);
-    assertTrue(result.isEmpty()); // No MailInfo remains
+    assertTrue(result.isEmpty());
 }
 
 @Test
 void testFilterPlans_WithEmptyHeaders_ReturnsOriginalList() {
-    // Mock input data
+    // Input data
     Map<String, String> preAuthHeadersMap = Collections.emptyMap();
     String clientId = "client123";
 
-    // Create sample DocumentInfo and MailInfo
-    DocumentInfo doc1 = new DocumentInfo("plan1");
-    DocumentInfo doc2 = new DocumentInfo("plan2");
-    MailInfo mailInfo = new MailInfo(Arrays.asList(doc1, doc2));
+    DocumentInfo document1 = new DocumentInfo("plan1");
+    DocumentInfo document2 = new DocumentInfo("plan2");
+    MailInfo mailInfo = new MailInfo(Arrays.asList(document1, document2));
 
     List<MailInfo> mailInfoList = List.of(mailInfo);
 
     // Call the method
     List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
 
-    // Verify the result
+    // Assertions
     assertNotNull(result);
-    assertEquals(mailInfoList, result); // Original list is returned
+    assertEquals(mailInfoList, result); // Original list is returned unfiltered
 }
