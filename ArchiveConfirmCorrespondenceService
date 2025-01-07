@@ -1,72 +1,4 @@
-@Slf4j
-@Service
-public class MailPreferencesDAO {
-
-    private final WebServiceTemplate webServiceTemplate;
-    private final String mailServiceUrl;
-
-
-    protected HttpServletResponse response;
-
-    private String msgId;
-
-    /* MailIT document document id */
-    private String docId;
-
-    public String getMsgId() {
-        return this.msgId;
-    }
-    public void setMsgId(String msgId) {
-        this.msgId = msgId;
-    }
-
-    public String getDocId() {
-        return this.docId;
-    }
-    public void setDocId(String docId) {
-        this.docId = docId;
-    }
-
-    public MailPreferencesDAO(WebServiceTemplate webServiceTemplate, @Value("${cbc.mailservice.url}") String mailServiceUrl,HttpServletResponse response) {
-        this.webServiceTemplate = webServiceTemplate;
-        this.mailServiceUrl = mailServiceUrl;
-        this.response=response;
-    }
-
-    public DocumentData getDocument(String messageId, String documentId, String updateId) throws IOException {
-        if (messageId == null || messageId.length() <= 0) {
-            throw new IllegalArgumentException("messageId");
-        }
-        if (documentId == null || documentId.length() <= 0) {
-            throw new IllegalArgumentException("documentId");
-        }
-        if (updateId == null || updateId.length() <= 0) {
-            throw new IllegalArgumentException("updateId");
-        }
-
-        if (log.isDebugEnabled()) {
-            log.debug("Entering MailServices.getMailMessage(), input messageId: {0} input documentId: {1} input updateId: {2}", messageId, documentId, updateId);
-        }
-        ObjectFactory objectFactory = new ObjectFactory();
-        DocumentData docData = null;
-        try {
-            DocumentRequest documentrequest = new DocumentRequest();
-            documentrequest.setMessageId(messageId);
-            documentrequest.setDocumentId(documentId);
-            documentrequest.setUpdateId(updateId);
-
-
-            JAXBElement<DocumentData> documentDataJAXBElement = (JAXBElement<DocumentData>) webServiceTemplate.marshalSendAndReceive(mailServiceUrl,
-                    objectFactory.createDocumentRequest(documentrequest));
-
-            docData = documentDataJAXBElement.getValue();
-            log.debug("Entering MailServices.getMailMessage(), input messageId: {0} input documentId: {1} input updateId: {2}", messageId, documentId, updateId);
-
-        }
-        catch (Exception error) {
-            throw new RuntimeException(error);
-        }
-            byte[] mailinbyte = docData.getData();
+byte[] mailinbyte = docData.getData();
 
             ServletOutputStream sos = null;
             try
@@ -94,4 +26,3 @@ public class MailPreferencesDAO {
             }
         return docData;
     }
-}
