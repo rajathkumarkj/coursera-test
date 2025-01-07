@@ -1,59 +1,4 @@
-public class MailItConfirmCorrespondenceService {
-
-    private final MailItPreferenceService mailItPreferenceService;
-    private final RequestService requestService;
-    private final ClientParticipantInfoCache clientParticipantInfoCache;
-    private final SetItPullClientCache setItPullClientCache;
-
-    MailItConfirmCorrespondenceService(final ClientParticipantInfoCache clientParticipantInfoCache,
-                                       final MailItPreferenceService mailItPreferenceService,
-                                       final SetItPullClientCache setItPullClientCache,
-                                       final RequestService requestService) {
-        this.clientParticipantInfoCache = clientParticipantInfoCache;
-        this.mailItPreferenceService = mailItPreferenceService;
-        this.setItPullClientCache = setItPullClientCache;
-        this.requestService = requestService;
-    }
-
-    public CorrespondenceResponse getCorrespondenceDocs(final Map<String, String> headersMap, final PartyInfo partyInfo) {
-        log.debug(">>> Get correspondence docs with partyInfo {}", partyInfo);
-        final Party party = Party.builder().partyId(partyInfo.getPartyId()).pptId(partyInfo.getSsn()).build();
-
-        final Map<String, String> preAuthHeadersMap = requestService.getPreAuthHeadersMap(headersMap);
-        final List<Account> accountsList = requestService.getAccountsList(party, preAuthHeadersMap);
-
-        final List<String> planList = accountsList.stream()
-                .filter(account -> CrspConstants.SAVINGS.equalsIgnoreCase(account.getPlanType()) || BooleanUtils.isFalse(account.isVoyaAccessPlan()))
-                .map(Account::getPlanId)
-                .collect(Collectors.toList());
-
-        MailFolder mailFolder = mailItPreferenceService.getCombinedMailFolder(partyInfo.getClientId(),
-                partyInfo.getSsn(), planList, DocumentType.CONFIRM, DocumentType.EDELIVERYUPDATE);
-
-        List<MailInfo> mailInfoList = null;
-        if (null != mailFolder)
-            mailInfoList = filterPlans(mailFolder.getMailInfo(), preAuthHeadersMap, partyInfo.getClientId());
-        log.debug("<<<< Exit Get correspondence docs with mailInfo {}", mailInfoList);
-
-
-        return CorrespondenceResponse.builder().usePlanLvlBrand(setPlanLvlBrandFlg(partyInfo))
-                .mailInfos(mailInfoList).build();
-    }
-
-    public boolean setPlanLvlBrandFlg(final PartyInfo partyInfo) {
-        List<String> planList = clientParticipantInfoCache.getAllPlansByClientParticipantControlType(partyInfo.getClientId(), partyInfo.getSsn(),
-                ControlType.WEB);
-        if (CollectionUtils.isNotEmpty(planList)) {
-            Plan plan = Plan.builder().planId(planList.get(0)).clientId(partyInfo.getClientId()).build();
-            PlanGeneralInfo planGeneralInfo = setItPullClientCache.getSetItPlanGeneralInfo(plan);
-            return "Y".equalsIgnoreCase(planGeneralInfo.getUsePlanLevelCustomBranding());
-        }
-        return false;
-    }
-
-    private List<MailInfo> filterPlans(List<MailInfo> mailInfoList, Map<String, String> preAuthHeadersMap, String clientId) {
-
-        if (MapUtils.isNotEmpty(preAuthHeadersMap) && CrspConstants.SPSRWB.equalsIgnoreCase(preAuthHeadersMap.get(CrspConstants.UC_VENDOR_ID))
+ if (MapUtils.isNotEmpty(preAuthHeadersMap) && CrspConstants.SPSRWB.equalsIgnoreCase(preAuthHeadersMap.get(CrspConstants.UC_VENDOR_ID))
                 && null != preAuthHeadersMap.get(CrspConstants.UC_PLAN_ID_LIST)) {
             List<String> globalPlanList = Arrays.asList(StringUtils.split(preAuthHeadersMap.get(CrspConstants.UC_PLAN_ID_LIST), ","));
 
@@ -74,9 +19,3 @@ public class MailItConfirmCorrespondenceService {
                 }
             }
             return filteredDocuments;
-        } else {
-            log.debug("Ignore filtering for clientId  {}", clientId);
-            return mailInfoList;
-        }
-    }
-}
