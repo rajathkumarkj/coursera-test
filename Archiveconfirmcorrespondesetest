@@ -1,8 +1,18 @@
-@ExtendWith(MockitoExtension.class)
-class ArchiveConfirmCorrespondenceServiceTest {
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class MailItConfirmCorrespondenceServiceTest {
 
     @Mock
-    private ArchiveDocsRestService archiveDocsRestService;
+    private MailItPreferenceService mailItPreferenceService;
 
     @Mock
     private RequestService requestService;
@@ -13,46 +23,108 @@ class ArchiveConfirmCorrespondenceServiceTest {
     @Mock
     private SetItPullClientCache setItPullClientCache;
 
-    @Mock
-    @Qualifier("asyncExecutor")
-    private Executor correspondenceExecutor;
-
     @InjectMocks
-    private ArchiveConfirmCorrespondenceService archiveConfirmCorrespondenceService;
+    private MailItConfirmCorrespondenceService service;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
 
     @Test
-    void testGetCorrespondenceDocs() {
-        // Arrange
-        Map<String, String> reqHeadersMap = Map.of("Authorization", "Bearer token", "UC-Vendor-ID", "SPSRWB", "UC-Plan-Id-List", "123,456");
-        PartyInfo partyInfo = new PartyInfo("client123", "12345");
-        Map<String, String> preAuthHeadersMap = Map.of("UC-Vendor-ID", "SPSRWB", "UC-Plan-Id-List", "123,456");
+    void testGetCorrespondenceDocs_WithValidInputs_ReturnsResponse() {
+        // Mock inputs
+        Map<String, String> headersMap = Map.of("Authorization", "Bearer token");
+        PartyInfo partyInfo = new PartyInfo("partyId", "clientId", "ssn");
 
-        Party party = Party.builder().partyId("12345").pptId("12345").build();
-        Account account = new Account();
-        account.setPlanType(CrspConstants.SAVINGS);
-        account.setVoyaAccessPlan(false);
-        account.setPlanId("123");
+        Party party = Party.builder().partyId("partyId").pptId("ssn").build();
+        List<Account> accountsList = List.of(new Account("plan1", "SAVINGS", true));
 
-        List<Account> accountsList = List.of(account);
-        Plan plan = new Plan();
-        plan.setPlanId("123");
+        List<String> planList = List.of("plan1");
+        MailFolder mailFolder = new MailFolder();
+        mailFolder.setMailInfo(Collections.emptyList());
 
-        List<Plan> filteredPlans = List.of(plan);
-        ArchiveDocsInfo archiveDocsInfo = new ArchiveDocsInfo();
-        List<ArchiveDocsInfo> archiveDocsInfos = List.of(archiveDocsInfo);
+        // Mock behavior
+        when(requestService.getPreAuthHeadersMap(headersMap)).thenReturn(headersMap);
+        when(requestService.getAccountsList(party, headersMap)).thenReturn(accountsList);
+        when(mailItPreferenceService.getCombinedMailFolder("clientId", "ssn", planList, DocumentType.CONFIRM, DocumentType.EDELIVERYUPDATE))
+                .thenReturn(mailFolder);
 
-        CompletableFuture<List<ArchiveDocsInfo>> futureDocs = CompletableFuture.completedFuture(archiveDocsInfos);
+        // Call method
+        CorrespondenceResponse response = service.getCorrespondenceDocs(headersMap, partyInfo);
 
-        Mockito.when(requestService.getPreAuthHeadersMap(reqHeadersMap)).thenReturn(preAuthHeadersMap);
-        Mockito.when(requestService.getAccountsList(party, preAuthHeadersMap)).thenReturn(accountsList);
-        Mockito.when(archiveDocsRestService.getEaseCorrespondenceDocList("12345", plan, true))
-                .thenReturn(archiveDocsInfos);
+        // Assertions
+        assertNotNull(response);
+        assertNull(response.getMailInfos());
+    }
 
-        // Act
-        CorrespondenceResponse response = archiveConfirmCorrespondenceService.getCorrespondenceDocs(reqHeadersMap, partyInfo);
+    @Test
+    void testSetPlanLvlBrandFlg_WithPlansAndBrandingEnabled_ReturnsTrue() {
+        // Mock inputs
+        PartyInfo partyInfo = new PartyInfo("partyId", "clientId", "ssn");
+        List<String> planList = List.of("plan1");
+        Plan plan = Plan.builder().planId("plan1").clientId("clientId").build();
+        PlanGeneralInfo planGeneralInfo = new PlanGeneralInfo();
+        planGeneralInfo.setUsePlanLevelCustomBranding("Y");
 
-        // Assert
-        Assertions.assertNotNull(response);
-        Assertions.assertEquals(archiveDocsInfos, response.getArchiveDocsInfos());
+        // Mock behavior
+        when(clientParticipantInfoCache.getAllPlansByClientParticipantControlType("clientId", "ssn", ControlType.WEB))
+                .thenReturn(planList);
+        when(setItPullClientCache.getSetItPlanGeneralInfo(plan)).thenReturn(planGeneralInfo);
+
+        // Call method
+        boolean result = service.setPlanLvlBrandFlg(partyInfo);
+
+        // Assertions
+        assertTrue(result);
+    }
+
+    @Test
+    void testSetPlanLvlBrandFlg_WithNoPlans_ReturnsFalse() {
+        // Mock inputs
+        PartyInfo partyInfo = new PartyInfo("partyId", "clientId", "ssn");
+
+        // Mock behavior
+        when(clientParticipantInfoCache.getAllPlansByClientParticipantControlType("clientId", "ssn", ControlType.WEB))
+                .thenReturn(Collections.emptyList());
+
+        // Call method
+        boolean result = service.setPlanLvlBrandFlg(partyInfo);
+
+        // Assertions
+        assertFalse(result);
+    }
+
+    @Test
+    void testFilterPlans_WithMatchingPlans_ReturnsFilteredDocuments() {
+        // Mock inputs
+        Map<String, String> preAuthHeadersMap = Map.of(CrspConstants.UC_VENDOR_ID, CrspConstants.SPSRWB,
+                CrspConstants.UC_PLAN_ID_LIST, "plan1,plan2");
+        String clientId = "clientId";
+        List<MailInfo> mailInfoList = List.of(new MailInfo(List.of(new DocumentInfo("plan1"))));
+
+        // Call method
+        List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
+
+        // Assertions
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals("plan1", result.get(0).getDocumentInfo().get(0).getPlanId());
+    }
+
+    @Test
+    void testFilterPlans_WithNoMatchingPlans_ReturnsEmptyList() {
+        // Mock inputs
+        Map<String, String> preAuthHeadersMap = Map.of(CrspConstants.UC_VENDOR_ID, CrspConstants.SPSRWB,
+                CrspConstants.UC_PLAN_ID_LIST, "plan3");
+        String clientId = "clientId";
+        List<MailInfo> mailInfoList = List.of(new MailInfo(List.of(new DocumentInfo("plan1"))));
+
+        // Call method
+        List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
+
+        // Assertions
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
     }
 }
