@@ -1,5 +1,7 @@
+import static org.mockito.Mockito.*;
+
 @Test
-void testFilterPlans_WithMatchingPlans() {
+void testFilterPlans_WithMatchingPlans_UsingMocks() {
     // Mock input
     Map<String, String> preAuthHeadersMap = Map.of(
         "UC_VENDOR_ID", "SPSRWB",
@@ -7,16 +9,24 @@ void testFilterPlans_WithMatchingPlans() {
     );
     String clientId = "client123";
 
-    // Create sample DocumentInfo and MailInfo
-    DocumentInfo doc1 = new DocumentInfo("plan1"); // Matches UC_PLAN_ID_LIST
-    DocumentInfo doc2 = new DocumentInfo("plan3"); // Doesn't match
-    MailInfo mailInfo = new MailInfo(List.of(doc1, doc2));
+    // Mock DocumentInfo
+    DocumentInfo doc1 = mock(DocumentInfo.class);
+    DocumentInfo doc2 = mock(DocumentInfo.class);
+
+    // Stub getPlanId()
+    when(doc1.getPlanId()).thenReturn("plan1"); // Matches UC_PLAN_ID_LIST
+    when(doc2.getPlanId()).thenReturn("plan3"); // Doesn't match
+
+    // Mock MailInfo
+    MailInfo mailInfo = mock(MailInfo.class);
+    when(mailInfo.getDocumentInfo()).thenReturn(List.of(doc1, doc2));
+
     List<MailInfo> mailInfoList = List.of(mailInfo);
 
     // Call the method
     List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
 
-    // Assertions
+    // Verify results
     assertNotNull(result);
     assertEquals(1, result.size()); // One MailInfo remains
     assertEquals(1, result.get(0).getDocumentInfo().size()); // Only one DocumentInfo remains
@@ -24,21 +34,29 @@ void testFilterPlans_WithMatchingPlans() {
 }
 
 @Test
-void testFilterPlans_WithEmptyHeaders() {
+void testFilterPlans_WithEmptyHeaders_UsingMocks() {
     // Mock input
     Map<String, String> preAuthHeadersMap = Collections.emptyMap();
     String clientId = "client123";
 
-    // Create sample DocumentInfo and MailInfo
-    DocumentInfo doc1 = new DocumentInfo("plan1");
-    DocumentInfo doc2 = new DocumentInfo("plan2");
-    MailInfo mailInfo = new MailInfo(List.of(doc1, doc2));
+    // Mock DocumentInfo
+    DocumentInfo doc1 = mock(DocumentInfo.class);
+    DocumentInfo doc2 = mock(DocumentInfo.class);
+
+    // Stub getPlanId()
+    when(doc1.getPlanId()).thenReturn("plan1");
+    when(doc2.getPlanId()).thenReturn("plan2");
+
+    // Mock MailInfo
+    MailInfo mailInfo = mock(MailInfo.class);
+    when(mailInfo.getDocumentInfo()).thenReturn(List.of(doc1, doc2));
+
     List<MailInfo> mailInfoList = List.of(mailInfo);
 
     // Call the method
     List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
 
-    // Assertions
+    // Verify results
     assertNotNull(result);
     assertEquals(mailInfoList, result); // Original list is returned
 }
