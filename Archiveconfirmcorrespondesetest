@@ -3,72 +3,106 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.ws.client.core.WebServiceTemplate;
 
-import java.util.*;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import javax.xml.bind.JAXBElement;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class MailItConfirmCorrespondenceServiceTest {
+class MailPreferencesDAOTest {
 
     @Mock
-    private MailItPreferenceService mailItPreferenceService;
+    private WebServiceTemplate webServiceTemplate;
 
     @Mock
-    private RequestService requestService;
-
-    @Mock
-    private ClientParticipantInfoCache clientParticipantInfoCache;
-
-    @Mock
-    private SetItPullClientCache setItPullClientCache;
+    private HttpServletResponse response;
 
     @InjectMocks
-    private MailItConfirmCorrespondenceService service;
+    private MailPreferencesDAO mailPreferencesDAO;
+
+    private final String mailServiceUrl = "http://mock.mailservice.url";
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        mailPreferencesDAO = new MailPreferencesDAO(webServiceTemplate, mailServiceUrl, response);
     }
 
     @Test
-    void testGetCorrespondenceDocs_ReturnsResponse() {
-        // Input data
-        Map<String, String> headersMap = Map.of("Authorization", "Bearer token");
-        PartyInfo partyInfo = new PartyInfo("partyId", "clientId", "ssn");
+    void testGetDocument_success() throws IOException {
+        // Mock input parameters
+        String messageId = "12345";
+        String documentId = "doc123";
+        String updateId = "update001";
 
-        // Mocked dependencies
-        when(requestService.getPreAuthHeadersMap(headersMap)).thenReturn(headersMap);
-        when(requestService.getAccountsList(any(), eq(headersMap))).thenReturn(Collections.emptyList());
-        when(mailItPreferenceService.getCombinedMailFolder(anyString(), anyString(), anyList(), any(), any()))
-                .thenReturn(null);
+        // Mock DocumentData response
+        DocumentData mockDocumentData = new DocumentData();
+        mockDocumentData.setData("Mock PDF Content".getBytes());
+        mockDocumentData.setMimetype("application/pdf");
+
+        JAXBElement<DocumentData> mockJAXBElement = mock(JAXBElement.class);
+        when(mockJAXBElement.getValue()).thenReturn(mockDocumentData);
+
+        when(webServiceTemplate.marshalSendAndReceive(eq(mailServiceUrl), any()))
+                .thenReturn(mockJAXBElement);
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ServletOutputStream mockServletOutputStream = mock(ServletOutputStream.class);
+        when(response.getOutputStream()).thenReturn(mockServletOutputStream);
 
         // Call the method
-        CorrespondenceResponse response = service.getCorrespondenceDocs(headersMap, partyInfo);
+        DocumentData result = mailPreferencesDAO.getDocument(messageId, documentId, updateId);
 
-        // Assertions
-        assertNotNull(response);
-        assertNull(response.getMailInfos());
+        // Verify interactions and assertions
+        assertNotNull(result);
+        assertEquals(mockDocumentData, result);
+
+        verify(response).reset();
+        verify(response).setHeader("Disposition", "attachment; filename=myDoc.pdf");
+        verify(response).setContentType("application/pdf");
+        verify(response).setContentLength(mockDocumentData.getData().length);
+        verify(mockServletOutputStream).write(mockDocumentData.getData());
     }
 
     @Test
-    void testSetPlanLvlBrandFlg_ReturnsTrue() {
-        // Input data
-        PartyInfo partyInfo = new PartyInfo("partyId", "clientId", "ssn");
-        List<String> planList = List.of("plan1");
+    void testGetDocument_invalidInput_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> mailPreferencesDAO.getDocument(null, "doc123", "update001"));
+        assertThrows(IllegalArgumentException.class, () -> mailPreferencesDAO.getDocument("12345", "", "update001"));
+        assertThrows(IllegalArgumentException.class, () -> mailPreferencesDAO.getDocument("12345", "doc123", null));
+    }
 
-        PlanGeneralInfo planGeneralInfo = new PlanGeneralInfo();
-        planGeneralInfo.setUsePlanLevelCustomBranding("Y");
+    @Test
+    void testGetDocument_noData_writesNoDataMessage() throws IOException {
+        // Mock input parameters
+        String messageId = "12345";
+        String documentId = "doc123";
+        String updateId = "update001";
 
-        // Mocked dependencies
-        when(clientParticipantInfoCache.getAllPlansByClientParticipantControlType("clientId", "ssn", ControlType.WEB))
-                .thenReturn(planList);
-        when(setItPullClientCache.getSetItPlanGeneralInfo(any())).thenReturn(planGeneralInfo);
+        // Mock DocumentData response
+        DocumentData mockDocumentData = new DocumentData();
+        mockDocumentData.setData(null);
+        mockDocumentData.setMimetype("application/pdf");
+
+        JAXBElement<DocumentData> mockJAXBElement = mock(JAXBElement.class);
+        when(mockJAXBElement.getValue()).thenReturn(mockDocumentData);
+
+        when(webServiceTemplate.marshalSendAndReceive(eq(mailServiceUrl), any()))
+                .thenReturn(mockJAXBElement);
+
+        ServletOutputStream mockServletOutputStream = mock(ServletOutputStream.class);
+        when(response.getOutputStream()).thenReturn(mockServletOutputStream);
 
         // Call the method
-        boolean result = service.setPlanLvlBrandFlg(partyInfo);
+        DocumentData result = mailPreferencesDAO.getDocument(messageId, documentId, updateId);
 
-        // Assertions
-        assertTrue(result);
+        // Verify interactions and assertions
+        assertNotNull(result);
+        verify(mockServletOutputStream).print("No Data");
     }
 }
