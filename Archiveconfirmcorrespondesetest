@@ -8,9 +8,7 @@ import org.springframework.ws.client.core.WebServiceTemplate;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import javax.xml.bind.JAXBElement;
-import java.io.IOException;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.*;
 
 class MailPreferencesDAOTest {
@@ -24,46 +22,35 @@ class MailPreferencesDAOTest {
     @InjectMocks
     private MailPreferencesDAO mailPreferencesDAO;
 
-    private final String mailServiceUrl = "http://mock.mailservice.url";
-
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        mailPreferencesDAO = new MailPreferencesDAO(webServiceTemplate, mailServiceUrl, response);
+        mailPreferencesDAO = new MailPreferencesDAO(webServiceTemplate, "http://mock.mailservice.url", response);
     }
 
     @Test
-    void testGetDocument_success() throws IOException {
-        // Mock input parameters
-        String messageId = "12345";
-        String documentId = "doc123";
-        String updateId = "update001";
-
-        // Mock DocumentData response with valid data
-        DocumentData mockDocumentData = new DocumentData();
+    void testGetDocument_validData() throws Exception {
+        // Mock DocumentData with valid byte array
         byte[] mockData = "Mock PDF Content".getBytes();
+        DocumentData mockDocumentData = new DocumentData();
         mockDocumentData.setData(mockData);
         mockDocumentData.setMimetype("application/pdf");
 
         JAXBElement<DocumentData> mockJAXBElement = mock(JAXBElement.class);
         when(mockJAXBElement.getValue()).thenReturn(mockDocumentData);
+        when(webServiceTemplate.marshalSendAndReceive(any(), any())).thenReturn(mockJAXBElement);
 
-        // Mock the behavior of WebServiceTemplate
-        when(webServiceTemplate.marshalSendAndReceive(any(String.class), any())).thenReturn(mockJAXBElement);
-
-        // Mock the ServletOutputStream
-        ServletOutputStream mockServletOutputStream = mock(ServletOutputStream.class);
-        when(response.getOutputStream()).thenReturn(mockServletOutputStream);
+        ServletOutputStream mockStream = mock(ServletOutputStream.class);
+        when(response.getOutputStream()).thenReturn(mockStream);
 
         // Call the method
-        DocumentData result = mailPreferencesDAO.getDocument(messageId, documentId, updateId);
+        mailPreferencesDAO.getDocument("12345", "doc123", "update001");
 
-        // Verify interactions and assertions
-        assertNotNull(result);
+        // Verify mailinbyte usage and response setup
         verify(response).reset();
         verify(response).setHeader("Disposition", "attachment; filename=myDoc.pdf");
         verify(response).setContentType("application/pdf");
         verify(response).setContentLength(mockData.length);
-        verify(mockServletOutputStream).write(mockData); // Verifies docData.getData() usage
+        verify(mockStream).write(mockData);
     }
 }
