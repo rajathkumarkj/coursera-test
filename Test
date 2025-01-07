@@ -31,7 +31,7 @@ void testFilterPlans_WithAllConditionsMet() throws Exception {
     // Invoke the private method with reflection
     List<MailInfo> result = (List<MailInfo>) filterPlansMethod.invoke(service, mailInfoList, preAuthHeadersMap, clientId);
 
-    // Debugging: Print the result
+    // Debugging: Print the result to see the filtered mail info list
     System.out.println("Filtered MailInfo List Size: " + result.size());
     result.forEach(mailInfoResult -> {
         System.out.println("MailInfo Document Size: " + mailInfoResult.getDocumentInfo().size());
@@ -44,16 +44,21 @@ void testFilterPlans_WithAllConditionsMet() throws Exception {
     assertNotNull(result);
     assertEquals(1, result.size(), "There should be one MailInfo object remaining.");
     List<DocumentInfo> filteredDocuments = result.get(0).getDocumentInfo();
+    System.out.println("Filtered Documents Count: " + filteredDocuments.size()); // Debug size
     assertEquals(2, filteredDocuments.size(), "There should be exactly two documents with valid plan IDs.");
 
-    // Check that only the documents with matching planIds remain
-    assertTrue(filteredDocuments.stream().anyMatch(doc -> "plan1".equals(doc.getPlanId())), "plan1 should be included.");
-    assertTrue(filteredDocuments.stream().anyMatch(doc -> "plan2".equals(doc.getPlanId())), "plan2 should be included.");
-    assertFalse(filteredDocuments.stream().anyMatch(doc -> "plan3".equals(doc.getPlanId())), "plan3 should not be included.");
+    // Ensure the document with plan1 and plan2 are present
+    boolean hasPlan1 = filteredDocuments.stream().anyMatch(doc -> "plan1".equals(doc.getPlanId()));
+    boolean hasPlan2 = filteredDocuments.stream().anyMatch(doc -> "plan2".equals(doc.getPlanId()));
+    boolean hasPlan3 = filteredDocuments.stream().anyMatch(doc -> "plan3".equals(doc.getPlanId()));
 
-    // Extra assertion to check the filtering logic explicitly
-    List<String> globalPlanList = Arrays.asList(StringUtils.split(preAuthHeadersMap.get("UC_PLAN_ID_LIST"), ","));
-    filteredDocuments.forEach(doc -> {
-        assertTrue(globalPlanList.contains(doc.getPlanId()), "Document planId should be in the global plan list.");
-    });
+    // Debug the results
+    System.out.println("Has plan1: " + hasPlan1);
+    System.out.println("Has plan2: " + hasPlan2);
+    System.out.println("Has plan3: " + hasPlan3);
+
+    // Assert that plan1 and plan2 are in the filtered list, and plan3 is not
+    assertTrue(hasPlan1, "plan1 should be included.");
+    assertTrue(hasPlan2, "plan2 should be included.");
+    assertFalse(hasPlan3, "plan3 should not be included.");
 }
