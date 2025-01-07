@@ -1,0 +1,69 @@
+@Test
+void testFilterPlans_WithValidPlanIds_ReturnsFilteredPlans() {
+    // Mock input data
+    Map<String, String> preAuthHeadersMap = Map.of(
+        "UC_VENDOR_ID", "SPSRWB",
+        "UC_PLAN_ID_LIST", "plan1,plan2"
+    );
+    String clientId = "client123";
+
+    // Create sample DocumentInfo and MailInfo
+    DocumentInfo doc1 = new DocumentInfo("plan1"); // Matching plan
+    DocumentInfo doc2 = new DocumentInfo("plan3"); // Non-matching plan
+    MailInfo mailInfo = new MailInfo(Arrays.asList(doc1, doc2)); // MailInfo contains both
+
+    List<MailInfo> mailInfoList = List.of(mailInfo);
+
+    // Call the method
+    List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
+
+    // Verify the result
+    assertNotNull(result);
+    assertEquals(1, result.size()); // One MailInfo remains
+    assertEquals(1, result.get(0).getDocumentInfo().size()); // Only one DocumentInfo remains
+    assertEquals("plan1", result.get(0).getDocumentInfo().get(0).getPlanId());
+}
+
+@Test
+void testFilterPlans_WithNoMatchingPlans_ReturnsEmptyList() {
+    // Mock input data
+    Map<String, String> preAuthHeadersMap = Map.of(
+        "UC_VENDOR_ID", "SPSRWB",
+        "UC_PLAN_ID_LIST", "plan3"
+    );
+    String clientId = "client123";
+
+    // Create sample DocumentInfo and MailInfo
+    DocumentInfo doc1 = new DocumentInfo("plan1"); // Non-matching plan
+    MailInfo mailInfo = new MailInfo(Collections.singletonList(doc1));
+
+    List<MailInfo> mailInfoList = List.of(mailInfo);
+
+    // Call the method
+    List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
+
+    // Verify the result
+    assertNotNull(result);
+    assertTrue(result.isEmpty()); // No MailInfo remains
+}
+
+@Test
+void testFilterPlans_WithEmptyHeaders_ReturnsOriginalList() {
+    // Mock input data
+    Map<String, String> preAuthHeadersMap = Collections.emptyMap();
+    String clientId = "client123";
+
+    // Create sample DocumentInfo and MailInfo
+    DocumentInfo doc1 = new DocumentInfo("plan1");
+    DocumentInfo doc2 = new DocumentInfo("plan2");
+    MailInfo mailInfo = new MailInfo(Arrays.asList(doc1, doc2));
+
+    List<MailInfo> mailInfoList = List.of(mailInfo);
+
+    // Call the method
+    List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
+
+    // Verify the result
+    assertNotNull(result);
+    assertEquals(mailInfoList, result); // Original list is returned
+}
