@@ -36,10 +36,14 @@ class MailPreferencesDAOTest {
         mockDocumentData.setData(mockData);
         mockDocumentData.setMimetype("application/pdf");
 
+        // Mock JAXBElement
         JAXBElement<DocumentData> mockJAXBElement = mock(JAXBElement.class);
-        when(mockJAXBElement.getValue()).thenReturn(mockDocumentData);
+        when(mockJAXBElement.getValue()).thenReturn(mockDocumentData); // Properly mock getValue()
+
+        // Mock WebServiceTemplate to return the mocked JAXBElement
         when(webServiceTemplate.marshalSendAndReceive(any(), any())).thenReturn(mockJAXBElement);
 
+        // Mock ServletOutputStream
         ServletOutputStream mockStream = mock(ServletOutputStream.class);
         when(response.getOutputStream()).thenReturn(mockStream);
 
