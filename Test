@@ -44,10 +44,14 @@ void testFilterPlans_WithAllConditionsMet() throws Exception {
     assertNotNull(result);
     assertEquals(1, result.size(), "There should be one MailInfo object remaining.");
     List<DocumentInfo> filteredDocuments = result.get(0).getDocumentInfo();
+
+    // Debug the filtered documents count and contents
     System.out.println("Filtered Documents Count: " + filteredDocuments.size()); // Debug size
+
+    // Ensure there are only two valid documents
     assertEquals(2, filteredDocuments.size(), "There should be exactly two documents with valid plan IDs.");
 
-    // Ensure the document with plan1 and plan2 are present
+    // Ensure that the filtered documents contain plan1 and plan2, but not plan3
     boolean hasPlan1 = filteredDocuments.stream().anyMatch(doc -> "plan1".equals(doc.getPlanId()));
     boolean hasPlan2 = filteredDocuments.stream().anyMatch(doc -> "plan2".equals(doc.getPlanId()));
     boolean hasPlan3 = filteredDocuments.stream().anyMatch(doc -> "plan3".equals(doc.getPlanId()));
