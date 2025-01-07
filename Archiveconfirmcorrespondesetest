@@ -9,6 +9,7 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import javax.xml.bind.JAXBElement;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class MailPreferencesDAOTest {
@@ -38,10 +39,11 @@ class MailPreferencesDAOTest {
 
         // Mock JAXBElement
         JAXBElement<DocumentData> mockJAXBElement = mock(JAXBElement.class);
-        when(mockJAXBElement.getValue()).thenReturn(mockDocumentData); // Properly mock getValue()
+        when(mockJAXBElement.getValue()).thenReturn(mockDocumentData);
 
-        // Mock WebServiceTemplate to return the mocked JAXBElement
-        when(webServiceTemplate.marshalSendAndReceive(any(), any())).thenReturn(mockJAXBElement);
+        // Explicitly mock the correct marshalSendAndReceive method
+        when(webServiceTemplate.marshalSendAndReceive(eq("http://mock.mailservice.url"), any()))
+                .thenReturn(mockJAXBElement);
 
         // Mock ServletOutputStream
         ServletOutputStream mockStream = mock(ServletOutputStream.class);
