@@ -1,114 +1,58 @@
 @ExtendWith(MockitoExtension.class)
-class CorrespondenceControllerTest {
+class ArchiveConfirmCorrespondenceServiceTest {
 
     @Mock
-    private CorrespondenceService correspondenceService;
+    private ArchiveDocsRestService archiveDocsRestService;
 
     @Mock
-    private MailDocumentService mailDocumentService;
+    private RequestService requestService;
+
+    @Mock
+    private ClientParticipantInfoCache clientParticipantInfoCache;
+
+    @Mock
+    private SetItPullClientCache setItPullClientCache;
+
+    @Mock
+    @Qualifier("asyncExecutor")
+    private Executor correspondenceExecutor;
 
     @InjectMocks
-    private CorrespondenceController correspondenceController;
+    private ArchiveConfirmCorrespondenceService archiveConfirmCorrespondenceService;
 
     @Test
-    void testGetCorrespondenceDoc_withNullHeaders() {
-        // Execute & Verify
-        Exception exception = assertThrows(NullPointerException.class, () -> {
-            correspondenceController.getCorrespondenceDoc(null);
-        });
+    void testGetCorrespondenceDocs() {
+        // Arrange
+        Map<String, String> reqHeadersMap = Map.of("Authorization", "Bearer token", "UC-Vendor-ID", "SPSRWB", "UC-Plan-Id-List", "123,456");
+        PartyInfo partyInfo = new PartyInfo("client123", "12345");
+        Map<String, String> preAuthHeadersMap = Map.of("UC-Vendor-ID", "SPSRWB", "UC-Plan-Id-List", "123,456");
 
-        assertEquals("httpHeaders is marked non-null but is null", exception.getMessage());
-    }
+        Party party = Party.builder().partyId("12345").pptId("12345").build();
+        Account account = new Account();
+        account.setPlanType(CrspConstants.SAVINGS);
+        account.setVoyaAccessPlan(false);
+        account.setPlanId("123");
 
-    @Test
-    void testGetCorrespondenceDoc_withValidHeaders() {
-        // Mock input
-        HttpHeaders httpHeaders = new HttpHeaders();
-        httpHeaders.add("Authorization", "Bearer token");
+        List<Account> accountsList = List.of(account);
+        Plan plan = new Plan();
+        plan.setPlanId("123");
 
-        // Create mock lists
-        List<MailInfo> mailInfos = List.of(new MailInfo("mailId", "mailSubject", "mailBody"));
-        List<ComboCorresInfo> comboCorresInfos = List.of(new ComboCorresInfo("comboId", "comboDetails"));
-        List<ArchiveDocsInfo> archiveDocsInfos = List.of(new ArchiveDocsInfo("archiveId", "archiveDetails"));
+        List<Plan> filteredPlans = List.of(plan);
+        ArchiveDocsInfo archiveDocsInfo = new ArchiveDocsInfo();
+        List<ArchiveDocsInfo> archiveDocsInfos = List.of(archiveDocsInfo);
 
-        // Build a mock CorrespondenceResponse
-        CorrespondenceResponse mockResponse = CorrespondenceResponse.builder()
-                .mailInfos(mailInfos)
-                .comboCorresInfos(comboCorresInfos)
-                .archiveDocsInfos(archiveDocsInfos)
-                .correspondenceText("Sample Correspondence")
-                .usePlanLvlBrand(true)
-                .statementBulletPoints("Sample Bullet Points")
-                .confirmSourceType(ConfirmSourceType.MANUAL)
-                .build();
+        CompletableFuture<List<ArchiveDocsInfo>> futureDocs = CompletableFuture.completedFuture(archiveDocsInfos);
 
-        when(correspondenceService.getCorrespondenceDocs(httpHeaders.toSingleValueMap())).thenReturn(mockResponse);
+        Mockito.when(requestService.getPreAuthHeadersMap(reqHeadersMap)).thenReturn(preAuthHeadersMap);
+        Mockito.when(requestService.getAccountsList(party, preAuthHeadersMap)).thenReturn(accountsList);
+        Mockito.when(archiveDocsRestService.getEaseCorrespondenceDocList("12345", plan, true))
+                .thenReturn(archiveDocsInfos);
 
-        // Execute
-        CorrespondenceResponse response = correspondenceController.getCorrespondenceDoc(httpHeaders);
+        // Act
+        CorrespondenceResponse response = archiveConfirmCorrespondenceService.getCorrespondenceDocs(reqHeadersMap, partyInfo);
 
-        // Verify
-        assertNotNull(response);
-        assertEquals(mockResponse, response);
-        verify(correspondenceService).getCorrespondenceDocs(httpHeaders.toSingleValueMap());
-    }
-
-    @Test
-    void testGetDocumentData_withNullMessageId() {
-        // Execute & Verify
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            correspondenceController.getDocumentData(null, "docId");
-        });
-
-        assertEquals("messageId must not be null", exception.getMessage());
-    }
-
-    @Test
-    void testGetDocumentData_withNullDocumentId() {
-        // Execute & Verify
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            correspondenceController.getDocumentData("msgId", null);
-        });
-
-        assertEquals("documentId must not be null", exception.getMessage());
-    }
-
-    @Test
-    void testGetDocumentData_withValidInputs() throws IOException {
-        // Mock input
-        String messageId = "12345";
-        String documentId = "67890";
-
-        // Create a mock DocumentData object
-        DocumentData mockDocumentData = new DocumentData("dataId", "contentType", new byte[0]);
-
-        // Mock behavior
-        when(mailDocumentService.getDocument(messageId, documentId)).thenReturn(mockDocumentData);
-
-        // Execute
-        DocumentData response = correspondenceController.getDocumentData(messageId, documentId);
-
-        // Verify
-        assertNotNull(response);
-        assertEquals(mockDocumentData, response);
-        verify(mailDocumentService).getDocument(messageId, documentId);
-    }
-
-    @Test
-    void testGetDocumentData_throwsIOException() throws IOException {
-        // Mock input
-        String messageId = "12345";
-        String documentId = "67890";
-
-        // Mock behavior
-        when(mailDocumentService.getDocument(messageId, documentId)).thenThrow(new IOException("Test exception"));
-
-        // Execute & Verify
-        Exception exception = assertThrows(IOException.class, () -> {
-            correspondenceController.getDocumentData(messageId, documentId);
-        });
-
-        assertEquals("Test exception", exception.getMessage());
-        verify(mailDocumentService).getDocument(messageId, documentId);
+        // Assert
+        Assertions.assertNotNull(response);
+        Assertions.assertEquals(archiveDocsInfos, response.getArchiveDocsInfos());
     }
 }
