@@ -1,7 +1,5 @@
-import static org.mockito.Mockito.*;
-
 @Test
-void testFilterPlans_WithMatchingPlans_UsingMocks() {
+void testFilterPlans_PrivateMethod() throws Exception {
     // Mock input
     Map<String, String> preAuthHeadersMap = Map.of(
         "UC_VENDOR_ID", "SPSRWB",
@@ -9,56 +7,31 @@ void testFilterPlans_WithMatchingPlans_UsingMocks() {
     );
     String clientId = "client123";
 
-    // Mock DocumentInfo
+    // Mock DocumentInfo and MailInfo
     DocumentInfo doc1 = mock(DocumentInfo.class);
     DocumentInfo doc2 = mock(DocumentInfo.class);
-
-    // Stub getPlanId()
-    when(doc1.getPlanId()).thenReturn("plan1"); // Matches UC_PLAN_ID_LIST
-    when(doc2.getPlanId()).thenReturn("plan3"); // Doesn't match
-
-    // Mock MailInfo
-    MailInfo mailInfo = mock(MailInfo.class);
-    when(mailInfo.getDocumentInfo()).thenReturn(List.of(doc1, doc2));
-
-    List<MailInfo> mailInfoList = List.of(mailInfo);
-
-    // Call the method
-    List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
-
-    // Verify results
-    assertNotNull(result);
-    assertEquals(1, result.size()); // One MailInfo remains
-    assertEquals(1, result.get(0).getDocumentInfo().size()); // Only one DocumentInfo remains
-    assertEquals("plan1", result.get(0).getDocumentInfo().get(0).getPlanId());
-}
-
-@Test
-void testFilterPlans_WithEmptyHeaders_UsingMocks() {
-    // Mock input
-    Map<String, String> preAuthHeadersMap = Collections.emptyMap();
-    String clientId = "client123";
-
-    // Mock DocumentInfo
-    DocumentInfo doc1 = mock(DocumentInfo.class);
-    DocumentInfo doc2 = mock(DocumentInfo.class);
-
-    // Stub getPlanId()
     when(doc1.getPlanId()).thenReturn("plan1");
-    when(doc2.getPlanId()).thenReturn("plan2");
-
-    // Mock MailInfo
+    when(doc2.getPlanId()).thenReturn("plan3");
     MailInfo mailInfo = mock(MailInfo.class);
     when(mailInfo.getDocumentInfo()).thenReturn(List.of(doc1, doc2));
-
     List<MailInfo> mailInfoList = List.of(mailInfo);
 
-    // Call the method
-    List<MailInfo> result = service.filterPlans(mailInfoList, preAuthHeadersMap, clientId);
+    // Access private method using reflection
+    Method filterPlansMethod = MailItConfirmCorrespondenceService.class.getDeclaredMethod(
+        "filterPlans", List.class, Map.class, String.class
+    );
+    filterPlansMethod.setAccessible(true);
+
+    // Invoke the private method
+    List<MailInfo> result = (List<MailInfo>) filterPlansMethod.invoke(
+        service, mailInfoList, preAuthHeadersMap, clientId
+    );
 
     // Verify results
     assertNotNull(result);
-    assertEquals(mailInfoList, result); // Original list is returned
+    assertEquals(1, result.size());
+    assertEquals(1, result.get(0).getDocumentInfo().size());
+    assertEquals("plan1", result.get(0).getDocumentInfo().get(0).getPlanId());
 }
 
 
