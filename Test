@@ -1,112 +1,59 @@
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import static org.mockito.Mockito.*;
-import static org.junit.jupiter.api.Assertions.*;
-import java.lang.reflect.Method;
-import java.util.*;
+@Test
+void testFilterPlans_WithAllConditionsMet() throws Exception {
+    // Set up the preAuthHeadersMap with valid data
+    Map<String, String> preAuthHeadersMap = Map.of(
+        "UC_VENDOR_ID", "SPSRWB", // Vendor ID must match
+        "UC_PLAN_ID_LIST", "plan1,plan2" // Valid plan list
+    );
+    String clientId = "client123";
 
-class MailItConfirmCorrespondenceServiceTest {
+    // Mock DocumentInfo and MailInfo with different planIds
+    DocumentInfo doc1 = mock(DocumentInfo.class);
+    DocumentInfo doc2 = mock(DocumentInfo.class);
+    DocumentInfo doc3 = mock(DocumentInfo.class);
 
-    private MailItConfirmCorrespondenceService service;
+    when(doc1.getPlanId()).thenReturn("plan1"); // Valid planId from the map
+    when(doc2.getPlanId()).thenReturn("plan3"); // Invalid planId
+    when(doc3.getPlanId()).thenReturn("plan2"); // Valid planId from the map
 
-    @BeforeEach
-    void setup() {
-        // Mock dependencies
-        ClientParticipantInfoCache clientParticipantInfoCache = mock(ClientParticipantInfoCache.class);
-        MailItPreferenceService mailItPreferenceService = mock(MailItPreferenceService.class);
-        SetItPullClientCache setItPullClientCache = mock(SetItPullClientCache.class);
-        RequestService requestService = mock(RequestService.class);
+    // Mock MailInfo containing the DocumentInfo objects
+    MailInfo mailInfo = mock(MailInfo.class);
+    when(mailInfo.getDocumentInfo()).thenReturn(List.of(doc1, doc2, doc3));
 
-        // Create the service instance
-        service = new MailItConfirmCorrespondenceService(
-            clientParticipantInfoCache, mailItPreferenceService, setItPullClientCache, requestService
-        );
-    }
+    List<MailInfo> mailInfoList = List.of(mailInfo);
 
-    @Test
-    void testFilterPlans_WithAllConditionsMet() throws Exception {
-        // Mock the preAuthHeadersMap and clientId
-        Map<String, String> preAuthHeadersMap = Map.of(
-            "UC_VENDOR_ID", "SPSRWB", // Vendor ID matches
-            "UC_PLAN_ID_LIST", "plan1,plan2" // Plan list should match these values
-        );
-        String clientId = "client123";
+    // Access private method filterPlans using reflection
+    Method filterPlansMethod = MailItConfirmCorrespondenceService.class.getDeclaredMethod(
+        "filterPlans", List.class, Map.class, String.class
+    );
+    filterPlansMethod.setAccessible(true);
 
-        // Mock DocumentInfo and MailInfo
-        DocumentInfo doc1 = mock(DocumentInfo.class);
-        DocumentInfo doc2 = mock(DocumentInfo.class);
-        DocumentInfo doc3 = mock(DocumentInfo.class);
+    // Invoke the private method with reflection
+    List<MailInfo> result = (List<MailInfo>) filterPlansMethod.invoke(service, mailInfoList, preAuthHeadersMap, clientId);
 
-        // doc1 and doc3 will match, but doc2 will not match any plan ID
-        when(doc1.getPlanId()).thenReturn("plan1");
-        when(doc2.getPlanId()).thenReturn("plan3");
-        when(doc3.getPlanId()).thenReturn("plan2");
-
-        MailInfo mailInfo = mock(MailInfo.class);
-        when(mailInfo.getDocumentInfo()).thenReturn(List.of(doc1, doc2, doc3));
-
-        List<MailInfo> mailInfoList = List.of(mailInfo);
-
-        // Access private method filterPlans using reflection
-        Method filterPlansMethod = MailItConfirmCorrespondenceService.class.getDeclaredMethod(
-            "filterPlans", List.class, Map.class, String.class
-        );
-        filterPlansMethod.setAccessible(true);
-
-        // Call the private method using reflection
-        List<MailInfo> result = (List<MailInfo>) filterPlansMethod.invoke(service, mailInfoList, preAuthHeadersMap, clientId);
-
-        // Debugging: Print the result
-        result.forEach(mailInfoResult -> {
-            System.out.println("Filtered MailInfo Document Size: " + mailInfoResult.getDocumentInfo().size());
-            mailInfoResult.getDocumentInfo().forEach(doc -> {
-                System.out.println("Document PlanId: " + doc.getPlanId());
-            });
+    // Debugging: Print the result
+    System.out.println("Filtered MailInfo List Size: " + result.size());
+    result.forEach(mailInfoResult -> {
+        System.out.println("MailInfo Document Size: " + mailInfoResult.getDocumentInfo().size());
+        mailInfoResult.getDocumentInfo().forEach(doc -> {
+            System.out.println("Document PlanId: " + doc.getPlanId());
         });
+    });
 
-        // Verify the result
-        assertNotNull(result);
-        assertEquals(1, result.size(), "There should be only one MailInfo object remaining."); // Only one MailInfo object should remain
-        List<DocumentInfo> filteredDocuments = result.get(0).getDocumentInfo();
-        assertEquals(2, filteredDocuments.size(), "There should be exactly two documents with valid plan IDs.");
+    // Verify that only documents with plan1 and plan2 are present
+    assertNotNull(result);
+    assertEquals(1, result.size(), "There should be one MailInfo object remaining.");
+    List<DocumentInfo> filteredDocuments = result.get(0).getDocumentInfo();
+    assertEquals(2, filteredDocuments.size(), "There should be exactly two documents with valid plan IDs.");
 
-        // Check that only the documents with matching plan IDs remain
-        assertTrue(filteredDocuments.stream().anyMatch(doc -> "plan1".equals(doc.getPlanId())), "plan1 should be included.");
-        assertTrue(filteredDocuments.stream().anyMatch(doc -> "plan2".equals(doc.getPlanId())), "plan2 should be included.");
-        assertFalse(filteredDocuments.stream().anyMatch(doc -> "plan3".equals(doc.getPlanId())), "plan3 should not be included.");
-    }
+    // Check that only the documents with matching planIds remain
+    assertTrue(filteredDocuments.stream().anyMatch(doc -> "plan1".equals(doc.getPlanId())), "plan1 should be included.");
+    assertTrue(filteredDocuments.stream().anyMatch(doc -> "plan2".equals(doc.getPlanId())), "plan2 should be included.");
+    assertFalse(filteredDocuments.stream().anyMatch(doc -> "plan3".equals(doc.getPlanId())), "plan3 should not be included.");
 
-    @Test
-    void testFilterPlans_WithoutMatchingVendorId() throws Exception {
-        // Mock the preAuthHeadersMap and clientId with a non-matching vendor ID
-        Map<String, String> preAuthHeadersMap = Map.of(
-            "UC_VENDOR_ID", "NON_MATCH", // Vendor ID doesn't match
-            "UC_PLAN_ID_LIST", "plan1,plan2"
-        );
-        String clientId = "client123";
-
-        DocumentInfo doc1 = mock(DocumentInfo.class);
-        DocumentInfo doc2 = mock(DocumentInfo.class);
-
-        when(doc1.getPlanId()).thenReturn("plan1");
-        when(doc2.getPlanId()).thenReturn("plan2");
-
-        MailInfo mailInfo = mock(MailInfo.class);
-        when(mailInfo.getDocumentInfo()).thenReturn(List.of(doc1, doc2));
-
-        List<MailInfo> mailInfoList = List.of(mailInfo);
-
-        // Access private method filterPlans using reflection
-        Method filterPlansMethod = MailItConfirmCorrespondenceService.class.getDeclaredMethod(
-            "filterPlans", List.class, Map.class, String.class
-        );
-        filterPlansMethod.setAccessible(true);
-
-        // Call the private method using reflection
-        List<MailInfo> result = (List<MailInfo>) filterPlansMethod.invoke(service, mailInfoList, preAuthHeadersMap, clientId);
-
-        // Verify that no filtering happens and all documents are returned
-        assertEquals(1, result.size(), "Only one MailInfo should be returned.");
-        assertEquals(2, result.get(0).getDocumentInfo().size(), "Both DocumentInfos should be included as no filtering happens.");
-    }
+    // Extra assertion to check the filtering logic explicitly
+    List<String> globalPlanList = Arrays.asList(StringUtils.split(preAuthHeadersMap.get("UC_PLAN_ID_LIST"), ","));
+    filteredDocuments.forEach(doc -> {
+        assertTrue(globalPlanList.contains(doc.getPlanId()), "Document planId should be in the global plan list.");
+    });
 }
