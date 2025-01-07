@@ -8,9 +8,10 @@ import org.springframework.ws.client.core.WebServiceTemplate;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import javax.xml.bind.JAXBElement;
+import java.io.IOException;
 
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class MailPreferencesDAOTest {
 
@@ -30,8 +31,13 @@ class MailPreferencesDAOTest {
     }
 
     @Test
-    void testGetDocument_validData() throws Exception {
-        // Mock DocumentData with valid byte array
+    void testGetDocument_validData() throws IOException {
+        // Mock input parameters
+        String messageId = "12345";
+        String documentId = "doc123";
+        String updateId = "update001";
+
+        // Mock DocumentData with valid data
         byte[] mockData = "Mock PDF Content".getBytes();
         DocumentData mockDocumentData = new DocumentData();
         mockDocumentData.setData(mockData);
@@ -41,9 +47,55 @@ class MailPreferencesDAOTest {
         JAXBElement<DocumentData> mockJAXBElement = mock(JAXBElement.class);
         when(mockJAXBElement.getValue()).thenReturn(mockDocumentData);
 
-        // Explicitly mock the correct marshalSendAndReceive method
-        when(webServiceTemplate.marshalSendAndReceive(eq("http://mock.mailservice.url"), any()))
-                .thenReturn(mockJAXBElement);
+        // Mock WebServiceTemplate to return the JAXBElement
+        doReturn(mockJAXBElement).when(webServiceTemplate).marshalSendAndReceive(anyString(), any());
+
+        // Mock ServletOutputStream
+        ServletOutputStream mockStream = mock(ServletOutputStream.class);
+        when(response.getOutputStream()).thenReturn(mockStream);
+
+        // Call the method
+        DocumentData result = mailPreferencesDAO.getDocument(messageId, documentId, updateId);
+
+        // Verify and assert
+        assertNotNull(result); // Assert result is not null
+        verify(response).reset();
+        verify(response).setHeader("Disposition", "attachment; filename=myDoc.pdf");
+        verify(response).setContentType("application/pdf");
+        verify(response).setContentLength(mockData.length);
+        verify(mockStream).write(mockData);
+        verify(mockStream).flush();
+        verify(mockStream).close();
+    }
+
+    @Test
+    void testGetDocument_invalidMessageId_throwsException() {
+        // Test invalid messageId
+        String messageId = null;
+        String documentId = "doc123";
+        String updateId = "update001";
+
+        // Assert exception is thrown for invalid messageId
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> mailPreferencesDAO.getDocument(messageId, documentId, updateId)
+        );
+
+        assertNotNull(exception);
+        verifyNoInteractions(webServiceTemplate);
+    }
+
+    @Test
+    void testGetDocument_noDataReturned_writesNoData() throws IOException {
+        // Mock DocumentData with null data
+        DocumentData mockDocumentData = new DocumentData();
+        mockDocumentData.setData(null);
+
+        JAXBElement<DocumentData> mockJAXBElement = mock(JAXBElement.class);
+        when(mockJAXBElement.getValue()).thenReturn(mockDocumentData);
+
+        // Mock WebServiceTemplate to return the JAXBElement
+        doReturn(mockJAXBElement).when(webServiceTemplate).marshalSendAndReceive(anyString(), any());
 
         // Mock ServletOutputStream
         ServletOutputStream mockStream = mock(ServletOutputStream.class);
@@ -52,11 +104,9 @@ class MailPreferencesDAOTest {
         // Call the method
         mailPreferencesDAO.getDocument("12345", "doc123", "update001");
 
-        // Verify mailinbyte usage and response setup
-        verify(response).reset();
-        verify(response).setHeader("Disposition", "attachment; filename=myDoc.pdf");
-        verify(response).setContentType("application/pdf");
-        verify(response).setContentLength(mockData.length);
-        verify(mockStream).write(mockData);
+        // Verify "No Data" is written
+        verify(mockStream).print("No Data");
+        verify(mockStream).flush();
+        verify(mockStream).close();
     }
 }
