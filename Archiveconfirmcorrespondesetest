@@ -49,7 +49,7 @@ class MailPreferencesDAOTest {
         JAXBElement<DocumentData> mockJAXBElement = mock(JAXBElement.class);
         when(mockJAXBElement.getValue()).thenReturn(mockDocumentData);
 
-        when(webServiceTemplate.marshalSendAndReceive(eq(mailServiceUrl), any()))
+        when(webServiceTemplate.marshalSendAndReceive(any(String.class), any()))
                 .thenReturn(mockJAXBElement);
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -92,7 +92,7 @@ class MailPreferencesDAOTest {
         JAXBElement<DocumentData> mockJAXBElement = mock(JAXBElement.class);
         when(mockJAXBElement.getValue()).thenReturn(mockDocumentData);
 
-        when(webServiceTemplate.marshalSendAndReceive(eq(mailServiceUrl), any()))
+        when(webServiceTemplate.marshalSendAndReceive(any(String.class), any()))
                 .thenReturn(mockJAXBElement);
 
         ServletOutputStream mockServletOutputStream = mock(ServletOutputStream.class);
