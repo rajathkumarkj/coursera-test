@@ -60,3 +60,18 @@ void testFilterPlans_WithEmptyHeaders_UsingMocks() {
     assertNotNull(result);
     assertEquals(mailInfoList, result); // Original list is returned
 }
+
+
+@BeforeEach
+void setup() {
+    // Mock dependencies
+    ClientParticipantInfoCache clientParticipantInfoCache = mock(ClientParticipantInfoCache.class);
+    MailItPreferenceService mailItPreferenceService = mock(MailItPreferenceService.class);
+    SetItPullClientCache setItPullClientCache = mock(SetItPullClientCache.class);
+    RequestService requestService = mock(RequestService.class);
+
+    // Create the service instance
+    service = new MailItConfirmCorrespondenceService(
+        clientParticipantInfoCache, mailItPreferenceService, setItPullClientCache, requestService
+    );
+}
