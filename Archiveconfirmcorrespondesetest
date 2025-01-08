@@ -3,68 +3,106 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.ws.client.core.WebServiceTemplate;
 
-import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServletResponse;
-import javax.xml.bind.JAXBElement;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Executor;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-class MailPreferencesDAOTest {
-
-    @Mock
-    private WebServiceTemplate webServiceTemplate;
+class CombineConfirmCorrespondenceServiceTest {
 
     @Mock
-    private HttpServletResponse response;
+    private ArchiveDocsRestService archiveDocsRestService;
+
+    @Mock
+    private MailItPreferenceService mailItPreferenceService;
+
+    @Mock
+    private SetItPullClientCache setItPullClientCache;
+
+    @Mock
+    private RequestService requestService;
+
+    @Mock
+    private ClientParticipantInfoCache clientParticipantInfoCache;
+
+    @Mock
+    private Executor correspondenceExecutor;
 
     @InjectMocks
-    private MailPreferencesDAO mailPreferencesDAO;
+    private CombineConfirmCorrespondenceService combineConfirmCorrespondenceService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        mailPreferencesDAO = new MailPreferencesDAO(webServiceTemplate, "http://mock.mailservice.url", response);
     }
 
     @Test
-    void testGetDocument_validData() throws Exception {
-        // Mock input parameters
-        String messageId = "12345";
-        String documentId = "doc123";
-        String updateId = "update001";
+    void testGetCorrespondenceDocs_withValidInputs_shouldReturnResponse() {
+        // Arrange
+        Map<String, String> headers = Map.of("Authorization", "Bearer test-token");
+        PartyInfo partyInfo = new PartyInfo("123", "456", "test-ssn");
+        when(requestService.getPreAuthHeadersMap(headers)).thenReturn(Map.of("key", "value"));
+        when(requestService.getAccountsList(any(), any())).thenReturn(List.of(
+            new Account("123", "Savings", true, "Plan1")
+        ));
+        when(setItPullClientCache.getClient(any())).thenReturn(new Client("123", "CEDARARCHIVEECOR"));
 
-        // Mock DocumentData with valid data
-        byte[] mockData = "Mock PDF Content".getBytes();
-        DocumentData mockDocumentData = new DocumentData();
-        mockDocumentData.setData(mockData);
-        mockDocumentData.setMimetype("application/pdf");
+        // Act
+        CorrespondenceResponse response = combineConfirmCorrespondenceService.getCorrespondenceDocs(headers, partyInfo);
 
-        // Mock JAXBElement
-        JAXBElement<DocumentData> mockJAXBElement = mock(JAXBElement.class);
-        when(mockJAXBElement.getValue()).thenReturn(mockDocumentData);
+        // Assert
+        assertNotNull(response);
+        verify(requestService, times(1)).getPreAuthHeadersMap(headers);
+        verify(requestService, times(1)).getAccountsList(any(), any());
+    }
 
-        // Use `any()` and avoid ambiguity by making sure the return type is properly mocked
-        when(webServiceTemplate.marshalSendAndReceive(any(), any()))
-                .thenReturn(mockJAXBElement);
+    @Test
+    void testGetCorrespondenceDocs_withEmptyPlans_shouldReturnEmptyComboCorresInfos() {
+        // Arrange
+        Map<String, String> headers = Map.of("Authorization", "Bearer test-token");
+        PartyInfo partyInfo = new PartyInfo("123", "456", "test-ssn");
+        when(requestService.getPreAuthHeadersMap(headers)).thenReturn(Map.of("key", "value"));
+        when(requestService.getAccountsList(any(), any())).thenReturn(List.of());
 
-        // Mock ServletOutputStream
-        ServletOutputStream mockStream = mock(ServletOutputStream.class);
-        when(response.getOutputStream()).thenReturn(mockStream);
+        // Act
+        CorrespondenceResponse response = combineConfirmCorrespondenceService.getCorrespondenceDocs(headers, partyInfo);
 
-        // Call the method
-        DocumentData result = mailPreferencesDAO.getDocument(messageId, documentId, updateId);
+        // Assert
+        assertNotNull(response);
+        assertTrue(response.getComboCorresInfos().isEmpty());
+    }
 
-        // Verify and assert
-        assertNotNull(result); // Assert result is not null
-        verify(response).reset();
-        verify(response).setHeader("Disposition", "attachment; filename=myDoc.pdf");
-        verify(response).setContentType("application/pdf");
-        verify(response).setContentLength(mockData.length);
-        verify(mockStream).write(mockData);
-        verify(mockStream).flush();
-        verify(mockStream).close();
+    @Test
+    void testSetPlanLvlBrandFlg_withValidData_shouldReturnTrue() {
+        // Arrange
+        PartyInfo partyInfo = new PartyInfo("123", "test-ssn", null);
+        when(clientParticipantInfoCache.getAllPlansByClientParticipantControlType(any(), any(), any()))
+            .thenReturn(List.of("Plan1"));
+        when(setItPullClientCache.getSetItPlanGeneralInfo(any()))
+            .thenReturn(new PlanGeneralInfo("Y"));
+
+        // Act
+        boolean result = combineConfirmCorrespondenceService.setPlanLvlBrandFlg(partyInfo);
+
+        // Assert
+        assertTrue(result);
+        verify(clientParticipantInfoCache, times(1)).getAllPlansByClientParticipantControlType(any(), any(), any());
+    }
+
+    @Test
+    void testSetPlanLvlBrandFlg_withNoPlans_shouldReturnFalse() {
+        // Arrange
+        PartyInfo partyInfo = new PartyInfo("123", "test-ssn", null);
+        when(clientParticipantInfoCache.getAllPlansByClientParticipantControlType(any(), any(), any()))
+            .thenReturn(List.of());
+
+        // Act
+        boolean result = combineConfirmCorrespondenceService.setPlanLvlBrandFlg(partyInfo);
+
+        // Assert
+        assertFalse(result);
     }
 }
