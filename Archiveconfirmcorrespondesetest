@@ -3,28 +3,30 @@
 import com.voya.ptpcrsp.correspondence.cache.*;
 import com.voya.ptpcrsp.correspondence.model.CorrespondenceResponse;
 import com.voya.ptpcrsp.correspondence.model.PartyInfo;
+import com.voya.ptpcrsp.correspondence.model.ConfirmSourceType;
+import com.voya.ptpcrsp.correspondence.model.CrspConstants;
 import com.voya.setitpullclient.model.Client;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.when;
 
-@Slf4j
-class CombineConfirmCorrespondenceServiceTest {
+@ExtendWith(MockitoExtension.class)
+class CorrespondenceServiceTest {
 
     @InjectMocks
-    private CombineConfirmCorrespondenceService service;
+    private CorrespondenceService correspondenceService;
 
     @Mock
     private MailItConfirmCache mailItConfirmCache;
@@ -44,82 +46,89 @@ class CombineConfirmCorrespondenceServiceTest {
     @Mock
     private RsDataServiceCache rsDataServiceCache;
 
+    private Map<String, String> headers;
+
+    private PartyInfo partyInfo;
+    private Client client;
+    private CorrespondenceResponse response;
+
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
-        service.correspondenceExecutor = Runnable::run;
+        headers = new HashMap<>();
+        partyInfo = new PartyInfo();
+        partyInfo.setClientId("12345");
+
+        client = new Client();
+        response = CorrespondenceResponse.builder().build();
     }
 
     @Test
-    void testGetCorrespondenceDocs_withConfirmSourceECOR() {
-        Map<String, String> headers = new HashMap<>();
-        PartyInfo partyInfo = new PartyInfo();
-        Client client = new Client();
-        client.setConfirmSource("ECOR");
+    void testGetCorrespondenceDocs_withConfirmSource_ECOR() {
+        client.setConfirmSource(ConfirmSourceType.ECOR.name());
+        client.setTextCorrespondence("Test Text");
 
-        CorrespondenceResponse response = CorrespondenceResponse.builder().build();
-
-        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
+        when(userInfoService.getParty(any())).thenReturn(partyInfo);
         when(setItPullClientCache.getClient(any())).thenReturn(client);
-        when(mailItConfirmCache.getCorrespondenceDocs(anyMap(), any())).thenReturn(response);
-        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any())).thenReturn(Collections.singletonMap("MSG_STATEMENT_BULLET_POINTS", "Bullet Points"));
+        when(mailItConfirmCache.getCorrespondenceDocs(any(), any())).thenReturn(response);
+        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any()))
+                .thenReturn(Collections.singletonMap(CrspConstants.MSG_STATEMENT_BULLET_POINTS, "Bullet Points"));
 
-        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
+        CorrespondenceResponse result = correspondenceService.getCorrespondenceDocs(headers);
 
         assertNotNull(result);
+        assertEquals(ConfirmSourceType.ECOR, result.getConfirmSourceType());
         assertEquals("Bullet Points", result.getStatementBulletPoints());
+        assertEquals("Test Text", result.getCorrespondenceText());
     }
 
     @Test
-    void testGetCorrespondenceDocs_withConfirmSourceDOCARCHIVE() {
-        Map<String, String> headers = new HashMap<>();
-        PartyInfo partyInfo = new PartyInfo();
-        Client client = new Client();
-        client.setConfirmSource("DOCARCHIVE");
+    void testGetCorrespondenceDocs_withConfirmSource_DOCARCHIVE() {
+        client.setConfirmSource(ConfirmSourceType.DOCARCHIVE.name());
+        client.setTextCorrespondence("Doc Archive Text");
 
-        CorrespondenceResponse response = CorrespondenceResponse.builder().build();
-
-        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
+        when(userInfoService.getParty(any())).thenReturn(partyInfo);
         when(setItPullClientCache.getClient(any())).thenReturn(client);
-        when(docArchiveCache.getCorrespondenceArchDocsList(anyMap(), any())).thenReturn(response);
-        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any())).thenReturn(Collections.singletonMap("MSG_STATEMENT_BULLET_POINTS", "Bullet Points"));
+        when(docArchiveCache.getCorrespondenceArchDocsList(any(), any())).thenReturn(response);
+        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any()))
+                .thenReturn(Collections.singletonMap(CrspConstants.MSG_STATEMENT_BULLET_POINTS, "Bullet Points"));
 
-        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
+        CorrespondenceResponse result = correspondenceService.getCorrespondenceDocs(headers);
 
         assertNotNull(result);
+        assertEquals(ConfirmSourceType.DOCARCHIVE, result.getConfirmSourceType());
         assertEquals("Bullet Points", result.getStatementBulletPoints());
+        assertEquals("Doc Archive Text", result.getCorrespondenceText());
     }
 
     @Test
-    void testGetCorrespondenceDocs_withConfirmSourceDOCARCHIVEECOR() {
-        Map<String, String> headers = new HashMap<>();
-        PartyInfo partyInfo = new PartyInfo();
-        Client client = new Client();
-        client.setConfirmSource("DOCARCHIVEECOR");
+    void testGetCorrespondenceDocs_withConfirmSource_DOCARCHIVEECOR() {
+        client.setConfirmSource(ConfirmSourceType.DOCARCHIVEECOR.name());
+        client.setTextCorrespondence("DocArchiveECOR Text");
 
-        CorrespondenceResponse response = CorrespondenceResponse.builder().build();
-
-        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
+        when(userInfoService.getParty(any())).thenReturn(partyInfo);
         when(setItPullClientCache.getClient(any())).thenReturn(client);
-        when(mailitArchiveCache.getCorrespondenceDocs(anyMap(), any())).thenReturn(response);
-        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any())).thenReturn(Collections.singletonMap("MSG_STATEMENT_BULLET_POINTS", "Bullet Points"));
+        when(mailitArchiveCache.getCorrespondenceDocs(any(), any())).thenReturn(response);
+        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any()))
+                .thenReturn(Collections.singletonMap(CrspConstants.MSG_STATEMENT_BULLET_POINTS, "Bullet Points"));
 
-        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
+        CorrespondenceResponse result = correspondenceService.getCorrespondenceDocs(headers);
 
         assertNotNull(result);
+        assertEquals(ConfirmSourceType.DOCARCHIVEECOR, result.getConfirmSourceType());
         assertEquals("Bullet Points", result.getStatementBulletPoints());
+        assertEquals("DocArchiveECOR Text", result.getCorrespondenceText());
     }
 
     @Test
     void testGetCorrespondenceDocs_whenClientIsNull() {
-        Map<String, String> headers = new HashMap<>();
-        PartyInfo partyInfo = new PartyInfo();
-
-        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
+        when(userInfoService.getParty(any())).thenReturn(partyInfo);
         when(setItPullClientCache.getClient(any())).thenReturn(null);
 
-        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
+        CorrespondenceResponse result = correspondenceService.getCorrespondenceDocs(headers);
 
         assertNotNull(result);
+        assertNull(result.getConfirmSourceType());
+        assertNull(result.getStatementBulletPoints());
+        assertNull(result.getCorrespondenceText());
     }
 }
