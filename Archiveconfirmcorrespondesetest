@@ -14,11 +14,11 @@ import org.mockito.MockitoAnnotations;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.when;
 
 @Slf4j
 class CombineConfirmCorrespondenceServiceTest {
@@ -47,7 +47,7 @@ class CombineConfirmCorrespondenceServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        service.correspondenceExecutor = Runnable::run; // for async operations
+        service.correspondenceExecutor = Runnable::run;
     }
 
     @Test
@@ -56,9 +56,9 @@ class CombineConfirmCorrespondenceServiceTest {
         PartyInfo partyInfo = new PartyInfo();
         Client client = new Client();
         client.setConfirmSource("ECOR");
-        
+
         CorrespondenceResponse response = CorrespondenceResponse.builder().build();
-        
+
         when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
         when(setItPullClientCache.getClient(any())).thenReturn(client);
         when(mailItConfirmCache.getCorrespondenceDocs(anyMap(), any())).thenReturn(response);
@@ -76,9 +76,9 @@ class CombineConfirmCorrespondenceServiceTest {
         PartyInfo partyInfo = new PartyInfo();
         Client client = new Client();
         client.setConfirmSource("DOCARCHIVE");
-        
+
         CorrespondenceResponse response = CorrespondenceResponse.builder().build();
-        
+
         when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
         when(setItPullClientCache.getClient(any())).thenReturn(client);
         when(docArchiveCache.getCorrespondenceArchDocsList(anyMap(), any())).thenReturn(response);
@@ -96,9 +96,9 @@ class CombineConfirmCorrespondenceServiceTest {
         PartyInfo partyInfo = new PartyInfo();
         Client client = new Client();
         client.setConfirmSource("DOCARCHIVEECOR");
-        
+
         CorrespondenceResponse response = CorrespondenceResponse.builder().build();
-        
+
         when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
         when(setItPullClientCache.getClient(any())).thenReturn(client);
         when(mailitArchiveCache.getCorrespondenceDocs(anyMap(), any())).thenReturn(response);
@@ -114,7 +114,7 @@ class CombineConfirmCorrespondenceServiceTest {
     void testGetCorrespondenceDocs_whenClientIsNull() {
         Map<String, String> headers = new HashMap<>();
         PartyInfo partyInfo = new PartyInfo();
-        
+
         when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
         when(setItPullClientCache.getClient(any())).thenReturn(null);
 
