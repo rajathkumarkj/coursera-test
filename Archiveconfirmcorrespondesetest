@@ -1,26 +1,28 @@
-import com.voya.crsp.client.*;
-import com.voya.crsp.model.*;
-import com.voya.crsp.service.*;
-import com.voya.crsp.util.*;
+import com.voya.pptcrsp.common.cache.RsDataServiceCache;
+import com.voya.pptcrsp.common.cache.SetItPullClientCache;
+import com.voya.pptcrsp.common.domain.Client;
+import com.voya.pptcrsp.common.domain.PartyInfo;
+import com.voya.pptcrsp.common.service.UserInfoServiceImpl;
+import com.voya.pptcrsp.correspondence.cache.DocArchiveCache;
+import com.voya.pptcrsp.correspondence.cache.MailItConfirmCache;
+import com.voya.pptcrsp.correspondence.cache.MailitArchiveCache;
+import com.voya.pptcrsp.correspondence.domain.CorrespondenceResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.beanutils.BeanUtilsBean;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.BooleanUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 @Slf4j
 class CombineConfirmCorrespondenceServiceTest {
 
@@ -28,90 +30,99 @@ class CombineConfirmCorrespondenceServiceTest {
     private CombineConfirmCorrespondenceService service;
 
     @Mock
-    private ArchiveDocsRestService archiveDocsRestService;
+    private MailItConfirmCache mailItConfirmCache;
 
     @Mock
-    private MailItPreferenceService mailItPreferenceService;
+    private MailitArchiveCache mailitArchiveCache;
+
+    @Mock
+    private UserInfoServiceImpl userInfoService;
 
     @Mock
     private SetItPullClientCache setItPullClientCache;
 
     @Mock
-    private RequestService requestService;
+    private DocArchiveCache docArchiveCache;
 
     @Mock
-    private ClientParticipantInfoCache clientParticipantInfoCache;
-
-    @Mock
-    private Executor correspondenceExecutor;
-
-    private PartyInfo partyInfo;
+    private RsDataServiceCache rsDataServiceCache;
 
     @BeforeEach
     void setUp() {
-        partyInfo = PartyInfo.builder()
-                .ssn("123456789")
-                .clientId("client1")
-                .build();
+        MockitoAnnotations.openMocks(this);
+       // service.correspondenceExecutor = Runnable::run; // for async operations
     }
 
     @Test
-    void testGetCorrespondenceDocs_withValidData_returnsResponse() {
-        Map<String, String> reqHeadersMap = new HashMap<>();
-        Map<String, String> preAuthHeaders = Map.of("someKey", "someValue");
+    void testGetCorrespondenceDocs_withConfirmSourceECOR() {
+        Map<String, String> headers = new HashMap<>();
+        PartyInfo partyInfo = new PartyInfo("434532","4324","4324","34324","324324325");
+        Client client = new Client();
+        client.setConfirmSource("ECOR");
 
-        Account account = new Account();
-        account.setPlanType("SAVINGS");
-        account.setVoyaAccessPlan(false);
-        account.setPlanId("plan1");
-        account.setPlanName("Plan Name");
+        CorrespondenceResponse response = CorrespondenceResponse.builder().build();
 
-        PlanGeneralInfo generalInfo = new PlanGeneralInfo();
-        generalInfo.setUsePlanLevelCustomBranding("Y");
+        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
+        when(setItPullClientCache.getClient(any())).thenReturn(client);
+        when(mailItConfirmCache.getCorrespondenceDocs(anyMap(), any())).thenReturn(response);
+        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any())).thenReturn(Collections.singletonMap("MSG_STATEMENT_BULLET_POINTS", "Bullet Points"));
 
-        ArchiveDocsInfo archiveDocsInfo = new ArchiveDocsInfo();
-        archiveDocsInfo.setPlanNo("plan1");
-        archiveDocsInfo.setPlanName("Plan Name");
-        archiveDocsInfo.setSysDocName("DOC001");
-        archiveDocsInfo.setUserDocName("User Document");
+        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
 
-        DocumentInfo docInfo = new DocumentInfo();
-        docInfo.setPlanId("plan1");
-        docInfo.setSysDocName("DOC002");
-        docInfo.setUserDocName("Mail Doc");
-        docInfo.setMessageId("msg123");
-        docInfo.setDocumentId("doc123");
+        assertNotNull(result);
+        assertEquals("Bullet Points", result.getStatementBulletPoints());
+    }
 
-        MailInfo mailInfo = new MailInfo();
-        mailInfo.setBeginDate(XmlDateUtil.toXMLGregorianCalendar(new Date()));
-        mailInfo.setDocumentInfo(List.of(docInfo));
+    @Test
+    void testGetCorrespondenceDocs_withConfirmSourceDOCARCHIVE() {
+        Map<String, String> headers = new HashMap<>();
+        PartyInfo partyInfo = new PartyInfo("434532","4324","4324","34324","324324325");
+        Client client = new Client();
+        client.setConfirmSource("DOCARCHIVE");
 
-        MailFolder mailFolder = new MailFolder();
-        mailFolder.setMailInfo(List.of(mailInfo));
+        CorrespondenceResponse response = CorrespondenceResponse.builder().build();
 
-        when(requestService.getPreAuthHeadersMap(reqHeadersMap)).thenReturn(preAuthHeaders);
-        when(requestService.getAccountsList(partyInfo, preAuthHeaders)).thenReturn(List.of(account));
-        when(setItPullClientCache.getClient("client1")).thenReturn(Client.builder().clientId("client1").confirmSource("OTHER").build());
-        when(archiveDocsRestService.getEaseCorrespondenceDocList(eq("123456789"), any(), eq(true)))
-                .thenReturn(List.of(archiveDocsInfo));
-        when(mailItPreferenceService.getCombinedMailFolder(any(), any(), any(), any(), any(), any()))
-                .thenReturn(mailFolder);
-        when(clientParticipantInfoCache.getAllPlansByClientParticipantControlType(any(), any(), any()))
-                .thenReturn(List.of("plan1"));
-        when(setItPullClientCache.getSetItPlanGeneralInfo(any())).thenReturn(generalInfo);
+        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
+        when(setItPullClientCache.getClient(any())).thenReturn(client);
+        when(docArchiveCache.getCorrespondenceArchDocsList(anyMap(), any())).thenReturn(response);
+        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any())).thenReturn(Collections.singletonMap("MSG_STATEMENT_BULLET_POINTS", "Bullet Points"));
 
-        // Mock async executor
-        doAnswer(invocation -> {
-            Runnable runnable = invocation.getArgument(0);
-            runnable.run();
-            return null;
-        }).when(correspondenceExecutor).execute(any());
+        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
 
-        CorrespondenceResponse response = service.getCorrespondenceDocs(reqHeadersMap, partyInfo);
+        assertNotNull(result);
+        assertEquals("Bullet Points", result.getStatementBulletPoints());
+    }
 
-        assertNotNull(response);
-        assertTrue(response.isUsePlanLvlBrand());
-        assertNotNull(response.getComboCorresInfos());
-        assertFalse(response.getComboCorresInfos().isEmpty());
+    @Test
+    void testGetCorrespondenceDocs_withConfirmSourceDOCARCHIVEECOR() {
+        Map<String, String> headers = new HashMap<>();
+        PartyInfo partyInfo = new PartyInfo("434532","4324","4324","34324","324324325");
+        Client client = new Client();
+        client.setConfirmSource("DOCARCHIVEECOR");
+
+        CorrespondenceResponse response = CorrespondenceResponse.builder().build();
+
+        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
+        when(setItPullClientCache.getClient(any())).thenReturn(client);
+        when(mailitArchiveCache.getCorrespondenceDocs(anyMap(), any())).thenReturn(response);
+        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any())).thenReturn(Collections.singletonMap("MSG_STATEMENT_BULLET_POINTS", "Bullet Points"));
+
+        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
+
+        assertNotNull(result);
+        assertEquals("Bullet Points", result.getStatementBulletPoints());
+    }
+
+    @Test
+    void testGetCorrespondenceDocs_whenClientIsNull() {
+        Map<String, String> headers = new HashMap<>();
+        PartyInfo partyInfo = new PartyInfo("434532","4324","4324","34324","324324325");
+
+        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
+        when(setItPullClientCache.getClient(any())).thenReturn(null);
+
+        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
+
+        assertNotNull(result);
     }
 }
