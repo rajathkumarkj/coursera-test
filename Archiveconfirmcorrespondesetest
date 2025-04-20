@@ -1,108 +1,119 @@
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Executor;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-class CombineConfirmCorrespondenceServiceTest {
+class CorrespondenceServiceTest {
 
     @Mock
-    private ArchiveDocsRestService archiveDocsRestService;
+    private MailItConfirmCache mailItConfirmCache;
 
     @Mock
-    private MailItPreferenceService mailItPreferenceService;
+    private MailitArchiveCache mailitArchiveCache;
+
+    @Mock
+    private UserInfoServiceImpl userInfoService;
 
     @Mock
     private SetItPullClientCache setItPullClientCache;
 
     @Mock
-    private RequestService requestService;
+    private DocArchiveCache docArchiveCache;
 
     @Mock
-    private ClientParticipantInfoCache clientParticipantInfoCache;
-
-    @Mock
-    private Executor correspondenceExecutor;
+    private RsDataServiceCache rsDataServiceCache;
 
     @InjectMocks
-    private CombineConfirmCorrespondenceService combineConfirmCorrespondenceService;
+    private CorrespondenceService correspondenceService;
+
+    private Map<String, String> reqHeadersMap;
+    private PartyInfo partyInfo;
+    private Client client;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+
+        reqHeadersMap = new HashMap<>();
+        reqHeadersMap.put("Authorization", "Bearer dummyToken");
+
+        partyInfo = new PartyInfo();
+        partyInfo.setClientId("clientId");
+
+        client = new Client();
     }
 
     @Test
-    void testGetCorrespondenceDocs_withValidInputs_shouldReturnResponse() {
-        // Arrange
-        Map<String, String> headers = Map.of("Authorization", "Bearer test-token");
-        PartyInfo partyInfo = new PartyInfo("123", "456", "test-ssn");
-        when(requestService.getPreAuthHeadersMap(headers)).thenReturn(Map.of("key", "value"));
-        when(requestService.getAccountsList(any(), any())).thenReturn(List.of(
-            new Account("123", "Savings", true, "Plan1")
-        ));
-        when(setItPullClientCache.getClient(any())).thenReturn(new Client("123", "CEDARARCHIVEECOR"));
+    void testGetCorrespondenceDocs_whenConfirmSourceIsECOR() {
+        client.setConfirmSource(ConfirmSourceType.ECOR.name());
 
-        // Act
-        CorrespondenceResponse response = combineConfirmCorrespondenceService.getCorrespondenceDocs(headers, partyInfo);
+        when(userInfoService.getParty(reqHeadersMap)).thenReturn(partyInfo);
+        when(setItPullClientCache.getClient("clientId")).thenReturn(client);
 
-        // Assert
+        CorrespondenceResponse expectedResponse = CorrespondenceResponse.builder().build();
+        when(mailItConfirmCache.getCorrespondenceDocs(reqHeadersMap, partyInfo)).thenReturn(expectedResponse);
+        when(rsDataServiceCache.getSiteManagerValues(eq("clientId"), isNull(), eq(CrspConstants.MAILPREFERENCES)))
+                .thenReturn(Map.of(CrspConstants.MSG_STATEMENT_BULLET_POINTS, "Sample Bullet Points"));
+
+        CorrespondenceResponse response = correspondenceService.getCorrespondenceDocs(reqHeadersMap);
+
         assertNotNull(response);
-        verify(requestService, times(1)).getPreAuthHeadersMap(headers);
-        verify(requestService, times(1)).getAccountsList(any(), any());
+        assertEquals(ConfirmSourceType.ECOR, response.getConfirmSourceType());
+        assertEquals("Sample Bullet Points", response.getStatementBulletPoints());
     }
 
     @Test
-    void testGetCorrespondenceDocs_withEmptyPlans_shouldReturnEmptyComboCorresInfos() {
-        // Arrange
-        Map<String, String> headers = Map.of("Authorization", "Bearer test-token");
-        PartyInfo partyInfo = new PartyInfo("123", "456", "test-ssn");
-        when(requestService.getPreAuthHeadersMap(headers)).thenReturn(Map.of("key", "value"));
-        when(requestService.getAccountsList(any(), any())).thenReturn(List.of());
+    void testGetCorrespondenceDocs_whenConfirmSourceIsDOCARCHIVE() {
+        client.setConfirmSource(ConfirmSourceType.DOCARCHIVE.name());
 
-        // Act
-        CorrespondenceResponse response = combineConfirmCorrespondenceService.getCorrespondenceDocs(headers, partyInfo);
+        when(userInfoService.getParty(reqHeadersMap)).thenReturn(partyInfo);
+        when(setItPullClientCache.getClient("clientId")).thenReturn(client);
 
-        // Assert
+        CorrespondenceResponse expectedResponse = CorrespondenceResponse.builder().build();
+        when(docArchiveCache.getCorrespondenceArchDocsList(reqHeadersMap, partyInfo)).thenReturn(expectedResponse);
+        when(rsDataServiceCache.getSiteManagerValues(eq("clientId"), isNull(), eq(CrspConstants.MAILPREFERENCES)))
+                .thenReturn(Map.of(CrspConstants.MSG_STATEMENT_BULLET_POINTS, "Another Bullet Points"));
+
+        CorrespondenceResponse response = correspondenceService.getCorrespondenceDocs(reqHeadersMap);
+
         assertNotNull(response);
-        assertTrue(response.getComboCorresInfos().isEmpty());
+        assertEquals(ConfirmSourceType.DOCARCHIVE, response.getConfirmSourceType());
+        assertEquals("Another Bullet Points", response.getStatementBulletPoints());
     }
 
     @Test
-    void testSetPlanLvlBrandFlg_withValidData_shouldReturnTrue() {
-        // Arrange
-        PartyInfo partyInfo = new PartyInfo("123", "test-ssn", null);
-        when(clientParticipantInfoCache.getAllPlansByClientParticipantControlType(any(), any(), any()))
-            .thenReturn(List.of("Plan1"));
-        when(setItPullClientCache.getSetItPlanGeneralInfo(any()))
-            .thenReturn(new PlanGeneralInfo("Y"));
+    void testGetCorrespondenceDocs_whenConfirmSourceIsDOCARCHIVEECOR() {
+        client.setConfirmSource(ConfirmSourceType.DOCARCHIVEECOR.name());
 
-        // Act
-        boolean result = combineConfirmCorrespondenceService.setPlanLvlBrandFlg(partyInfo);
+        when(userInfoService.getParty(reqHeadersMap)).thenReturn(partyInfo);
+        when(setItPullClientCache.getClient("clientId")).thenReturn(client);
 
-        // Assert
-        assertTrue(result);
-        verify(clientParticipantInfoCache, times(1)).getAllPlansByClientParticipantControlType(any(), any(), any());
+        CorrespondenceResponse expectedResponse = CorrespondenceResponse.builder().build();
+        when(mailitArchiveCache.getCorrespondenceDocs(reqHeadersMap, partyInfo)).thenReturn(expectedResponse);
+        when(rsDataServiceCache.getSiteManagerValues(eq("clientId"), isNull(), eq(CrspConstants.MAILPREFERENCES)))
+                .thenReturn(Map.of(CrspConstants.MSG_STATEMENT_BULLET_POINTS, "Yet Another Bullet Points"));
+
+        CorrespondenceResponse response = correspondenceService.getCorrespondenceDocs(reqHeadersMap);
+
+        assertNotNull(response);
+        assertEquals(ConfirmSourceType.DOCARCHIVEECOR, response.getConfirmSourceType());
+        assertEquals("Yet Another Bullet Points", response.getStatementBulletPoints());
     }
 
     @Test
-    void testSetPlanLvlBrandFlg_withNoPlans_shouldReturnFalse() {
-        // Arrange
-        PartyInfo partyInfo = new PartyInfo("123", "test-ssn", null);
-        when(clientParticipantInfoCache.getAllPlansByClientParticipantControlType(any(), any(), any()))
-            .thenReturn(List.of());
+    void testGetCorrespondenceDocs_whenClientIsNull() {
+        when(userInfoService.getParty(reqHeadersMap)).thenReturn(partyInfo);
+        when(setItPullClientCache.getClient("clientId")).thenReturn(null);
 
-        // Act
-        boolean result = combineConfirmCorrespondenceService.setPlanLvlBrandFlg(partyInfo);
+        CorrespondenceResponse response = correspondenceService.getCorrespondenceDocs(reqHeadersMap);
 
-        // Assert
-        assertFalse(result);
+        assertNotNull(response); // Should return empty CorrespondenceResponse
     }
 }
