@@ -1,0 +1,24 @@
+import java.io.Serializable;
+import java.util.List;
+public class PenPayData implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private List<PaymentInfo> recentPayments;
+    private String prtState = "";
+
+    public PenPayData(String prtState, List<PaymentInfo> payments){
+        this.prtState = prtState;
+        this.recentPayments = payments;
+    }
+    public List<PaymentInfo> getRecentPayments(){
+        return this.recentPayments;
+    }
+    public void setRecentPayments(List<PaymentInfo> recentPayments){
+        this.recentPayments = recentPayments;
+    }
+    public void setPrtState(String prtState){
+        this.prtState = prtState;
+    }
+    public String getPrtState(){
+        return this.prtState;
+    }
+}
