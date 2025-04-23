@@ -1,128 +1,89 @@
-import com.voya.pptcrsp.common.cache.RsDataServiceCache;
-import com.voya.pptcrsp.common.cache.SetItPullClientCache;
-import com.voya.pptcrsp.common.domain.Client;
-import com.voya.pptcrsp.common.domain.PartyInfo;
-import com.voya.pptcrsp.common.service.UserInfoServiceImpl;
-import com.voya.pptcrsp.correspondence.cache.DocArchiveCache;
-import com.voya.pptcrsp.correspondence.cache.MailItConfirmCache;
-import com.voya.pptcrsp.correspondence.cache.MailitArchiveCache;
-import com.voya.pptcrsp.correspondence.domain.CorrespondenceResponse;
-import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.BeforeEach;
+import com.voya.pptcrsp.exception.ExceptionTypeEnum;
+import com.voya.pptcrsp.exception.RestClientApiException;
+import com.voya.pptcrsp.tf.domain.PenPayData;
+import com.voya.pptcrsp.tf.domain.PenPayServiceRequest;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClient.RequestBodySpec;
+import org.springframework.web.client.RestClient.ResponseSpec;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-@Slf4j
-class CombineConfirmCorrespondenceServiceTest {
+@ExtendWith(MockitoExtension.class)
+class PenPayServiceTest {
+
+    @Mock
+    private RestClient restClient;
+
+    @Mock
+    private RestClient.RequestBodyUriSpec uriSpec;
+
+    @Mock
+    private RestClient.RequestBodySpec bodySpec;
+
+    @Mock
+    private RestClient.ResponseSpec responseSpec;
 
     @InjectMocks
-    private CombineConfirmCorrespondenceService service;
+    private PenPayService penPayService = new PenPayService(restClient, "http://fake-url");
 
-    @Mock
-    private MailItConfirmCache mailItConfirmCache;
+    @Test
+    void testGetPaymentHistory_success() {
+        PenPayData mockData = new PenPayData();
 
-    @Mock
-    private MailitArchiveCache mailitArchiveCache;
+        when(restClient.post()).thenReturn(uriSpec);
+        when(uriSpec.uri(anyString())).thenReturn(bodySpec);
+        when(bodySpec.body(any())).thenReturn(responseSpec);
+        when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+        when(responseSpec.body(PenPayData.class)).thenReturn(mockData);
 
-    @Mock
-    private UserInfoServiceImpl userInfoService;
+        PenPayData result = penPayService.getPaymentHistory("client1", "participant1");
 
-    @Mock
-    private SetItPullClientCache setItPullClientCache;
-
-    @Mock
-    private DocArchiveCache docArchiveCache;
-
-    @Mock
-    private RsDataServiceCache rsDataServiceCache;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-       // service.correspondenceExecutor = Runnable::run; // for async operations
+        assertNotNull(result);
+        verify(restClient).post();
     }
 
     @Test
-    void testGetCorrespondenceDocs_withConfirmSourceECOR() {
-        Map<String, String> headers = new HashMap<>();
-        PartyInfo partyInfo = new PartyInfo("434532","4324","4324","34324","324324325");
-        Client client = new Client();
-        client.setConfirmSource("ECOR");
+    void testGetPaymentHistory_throwsRestClientApiException() throws IOException {
+        when(restClient.post()).thenReturn(uriSpec);
+        when(uriSpec.uri(anyString())).thenReturn(bodySpec);
+        when(bodySpec.body(any())).thenReturn(responseSpec);
 
-        CorrespondenceResponse response = CorrespondenceResponse.builder().build();
+        // Simulate error status
+        HttpStatusCode statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+        InputStream errorStream = new ByteArrayInputStream("Error Message".getBytes());
 
-        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
-        when(setItPullClientCache.getClient(any())).thenReturn(client);
-        when(mailItConfirmCache.getCorrespondenceDocs(anyMap(), any())).thenReturn(response);
-        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any())).thenReturn(Collections.singletonMap("MSG_STATEMENT_BULLET_POINTS", "Bullet Points"));
+        when(responseSpec.onStatus(any(), any())).thenAnswer(invocation -> {
+            var statusPredicate = invocation.getArgument(0);
+            var errorFunction = invocation.getArgument(1);
 
-        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
+            // simulate error trigger
+            if (statusPredicate.test(statusCode)) {
+                var mockResponse = mock(RestClient.ResponseSpec.ClientResponse.class);
+                when(mockResponse.getStatusCode()).thenReturn(statusCode);
+                when(mockResponse.getBody()).thenReturn(errorStream);
+                try {
+                    errorFunction.accept(null, mockResponse);
+                } catch (RestClientApiException ex) {
+                    throw ex;
+                }
+            }
+            return responseSpec;
+        });
 
-        assertNotNull(result);
-        assertEquals("Bullet Points", result.getStatementBulletPoints());
-    }
+        RestClientApiException exception = assertThrows(RestClientApiException.class,
+                () -> penPayService.getPaymentHistory("client1", "participant1"));
 
-    @Test
-    void testGetCorrespondenceDocs_withConfirmSourceDOCARCHIVE() {
-        Map<String, String> headers = new HashMap<>();
-        PartyInfo partyInfo = new PartyInfo("434532","4324","4324","34324","324324325");
-        Client client = new Client();
-        client.setConfirmSource("DOCARCHIVE");
-
-        CorrespondenceResponse response = CorrespondenceResponse.builder().build();
-
-        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
-        when(setItPullClientCache.getClient(any())).thenReturn(client);
-        when(docArchiveCache.getCorrespondenceArchDocsList(anyMap(), any())).thenReturn(response);
-        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any())).thenReturn(Collections.singletonMap("MSG_STATEMENT_BULLET_POINTS", "Bullet Points"));
-
-        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
-
-        assertNotNull(result);
-        assertEquals("Bullet Points", result.getStatementBulletPoints());
-    }
-
-    @Test
-    void testGetCorrespondenceDocs_withConfirmSourceDOCARCHIVEECOR() {
-        Map<String, String> headers = new HashMap<>();
-        PartyInfo partyInfo = new PartyInfo("434532","4324","4324","34324","324324325");
-        Client client = new Client();
-        client.setConfirmSource("DOCARCHIVEECOR");
-
-        CorrespondenceResponse response = CorrespondenceResponse.builder().build();
-
-        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
-        when(setItPullClientCache.getClient(any())).thenReturn(client);
-        when(mailitArchiveCache.getCorrespondenceDocs(anyMap(), any())).thenReturn(response);
-        when(rsDataServiceCache.getSiteManagerValues(any(), any(), any())).thenReturn(Collections.singletonMap("MSG_STATEMENT_BULLET_POINTS", "Bullet Points"));
-
-        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
-
-        assertNotNull(result);
-        assertEquals("Bullet Points", result.getStatementBulletPoints());
-    }
-
-    @Test
-    void testGetCorrespondenceDocs_whenClientIsNull() {
-        Map<String, String> headers = new HashMap<>();
-        PartyInfo partyInfo = new PartyInfo("434532","4324","4324","34324","324324325");
-
-        when(userInfoService.getParty(anyMap())).thenReturn(partyInfo);
-        when(setItPullClientCache.getClient(any())).thenReturn(null);
-
-        CorrespondenceResponse result = service.getCorrespondenceDocs(headers);
-
-        assertNotNull(result);
+        assertEquals(ExceptionTypeEnum.REST_API_ERROR, exception.getExceptionTypeEnum());
+        assertEquals(statusCode, exception.getStatusCode());
     }
 }
