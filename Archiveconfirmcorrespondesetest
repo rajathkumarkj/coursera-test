@@ -2,6 +2,7 @@ import com.voya.pptcrsp.exception.ExceptionTypeEnum;
 import com.voya.pptcrsp.exception.RestClientApiException;
 import com.voya.pptcrsp.tf.domain.PenPayData;
 import com.voya.pptcrsp.tf.domain.PenPayServiceRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -9,10 +10,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClient.RequestBodySpec;
+import org.springframework.web.client.RestClient.RequestHeadersSpec;
 import org.springframework.web.client.RestClient.ResponseSpec;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -31,20 +32,31 @@ class PenPayServiceTest {
     private RestClient.RequestBodySpec bodySpec;
 
     @Mock
+    private RestClient.RequestHeadersSpec<?> headersSpec;
+
+    @Mock
     private RestClient.ResponseSpec responseSpec;
 
     @InjectMocks
-    private PenPayService penPayService = new PenPayService(restClient, "http://fake-url");
+    private PenPayService penPayService;
+
+    private final String serviceUrl = "http://fake-url.com";
+
+    @BeforeEach
+    void setUp() {
+        penPayService = new PenPayService(restClient, serviceUrl);
+    }
 
     @Test
-    void testGetPaymentHistory_success() {
-        PenPayData mockData = new PenPayData();
+    void getPaymentHistory_success() {
+        PenPayData mockResponse = new PenPayData();
 
         when(restClient.post()).thenReturn(uriSpec);
-        when(uriSpec.uri(anyString())).thenReturn(bodySpec);
-        when(bodySpec.body(any())).thenReturn(responseSpec);
+        when(uriSpec.uri(serviceUrl)).thenReturn(bodySpec);
+        when(bodySpec.body(any(PenPayServiceRequest.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
-        when(responseSpec.body(PenPayData.class)).thenReturn(mockData);
+        when(responseSpec.body(PenPayData.class)).thenReturn(mockResponse);
 
         PenPayData result = penPayService.getPaymentHistory("client1", "participant1");
 
@@ -53,37 +65,27 @@ class PenPayServiceTest {
     }
 
     @Test
-    void testGetPaymentHistory_throwsRestClientApiException() throws IOException {
+    void getPaymentHistory_restClientApiException() throws Exception {
+        InputStream errorStream = new ByteArrayInputStream("error body".getBytes());
+
         when(restClient.post()).thenReturn(uriSpec);
-        when(uriSpec.uri(anyString())).thenReturn(bodySpec);
-        when(bodySpec.body(any())).thenReturn(responseSpec);
-
-        // Simulate error status
-        HttpStatusCode statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-        InputStream errorStream = new ByteArrayInputStream("Error Message".getBytes());
-
+        when(uriSpec.uri(serviceUrl)).thenReturn(bodySpec);
+        when(bodySpec.body(any(PenPayServiceRequest.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.onStatus(any(), any())).thenAnswer(invocation -> {
-            var statusPredicate = invocation.getArgument(0);
-            var errorFunction = invocation.getArgument(1);
-
-            // simulate error trigger
-            if (statusPredicate.test(statusCode)) {
-                var mockResponse = mock(RestClient.ResponseSpec.ClientResponse.class);
-                when(mockResponse.getStatusCode()).thenReturn(statusCode);
-                when(mockResponse.getBody()).thenReturn(errorStream);
-                try {
-                    errorFunction.accept(null, mockResponse);
-                } catch (RestClientApiException ex) {
-                    throw ex;
-                }
-            }
+            var handler = invocation.getArgument(1);
+            var dummyResponse = mock(org.springframework.web.client.RestClient.ResponseSpec.class);
+            var responseMock = mock(org.springframework.web.client.ClientResponse.class);
+            when(responseMock.getStatusCode()).thenReturn(HttpStatus.BAD_REQUEST);
+            when(responseMock.getBody()).thenReturn(errorStream);
+            handler.handle(null, responseMock);
             return responseSpec;
         });
 
-        RestClientApiException exception = assertThrows(RestClientApiException.class,
-                () -> penPayService.getPaymentHistory("client1", "participant1"));
+        RestClientApiException exception = assertThrows(RestClientApiException.class, () ->
+                penPayService.getPaymentHistory("client1", "participant1"));
 
-        assertEquals(ExceptionTypeEnum.REST_API_ERROR, exception.getExceptionTypeEnum());
-        assertEquals(statusCode, exception.getStatusCode());
+        assertEquals(ExceptionTypeEnum.REST_API_ERROR, exception.getExceptionType());
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
     }
 }
