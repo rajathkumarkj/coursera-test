@@ -1,207 +1,40 @@
-@Service
+import com.voya.pptcrsp.exception.ExceptionTypeEnum;
+import com.voya.pptcrsp.exception.RestClientApiException;
+import com.voya.pptcrsp.tf.domain.PenPayData;
+import com.voya.pptcrsp.tf.domain.PenPayServiceRequest;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+
 @Slf4j
-public class CombineConfirmCorrespondenceService {
-    private final ArchiveDocsRestService archiveDocsRestService;
-    private final MailItPreferenceService mailItPreferenceService;
-    private final SetItPullClientCache setItPullClientCache;
-    private final RequestService requestService;
-    private final ClientParticipantInfoCache clientParticipantInfoCache;
+@Service
+public class PenPayService {
+    final static String DEFAULT_PLAN_ID_NAME = "PENPAY";
+    final static String DEFAULT_PLAN_TYPE = "PEN_PAY";
+    private static final String DATE_FORMAT = "MMddyyyy";
+    private static final String DISPLAY_DATE_FORMAT = "MM/dd/yyyy";
+    private static final int WRONG_DATE_DIGIT = 7;
+    private final String penpayServiceUrl;
+    private final RestClient restClient;
 
-    @Autowired
-    @Qualifier("asyncExecutor")
-    private Executor correspondenceExecutor;
-
-    CombineConfirmCorrespondenceService(final ClientParticipantInfoCache clientParticipantInfoCache,
-                                        final ArchiveDocsRestService archiveDocsRestService,
-                                        final MailItPreferenceService mailItPreferenceService,
-                                        final RequestService requestService, final SetItPullClientCache setItPullClientCache) {
-        this.archiveDocsRestService = archiveDocsRestService;
-        this.mailItPreferenceService = mailItPreferenceService;
-        this.setItPullClientCache = setItPullClientCache;
-        this.clientParticipantInfoCache = clientParticipantInfoCache;
-        this.requestService = requestService;
-
+    public PenPayService(final RestClient restClient, @Value("${penpay.service.url}") final String serviceUrl) {
+        this.penpayServiceUrl = serviceUrl;
+        this.restClient = restClient;
     }
 
-    public CorrespondenceResponse getCorrespondenceDocs(final Map<String, String> reqHeadersMap,
-                                                        final PartyInfo partyInfo) {
-        log.info(">>> Get correspondence Docs for partyInfo ::{}", partyInfo);
-        final Map<String, String> preAuthHeadersMap = requestService.getPreAuthHeadersMap(reqHeadersMap);
-        final List<Account> accountsList = requestService.getAccountsList(partyInfo, preAuthHeadersMap);
+    public PenPayData getPaymentHistory(String clientId, String participantId) {
+        PenPayServiceRequest penpayServiceRequest = new PenPayServiceRequest();
+        penpayServiceRequest.setClientId(clientId);
+        penpayServiceRequest.setParticipantId(participantId);
+        PenPayData result = restClient.post().uri(penpayServiceUrl).body(penpayServiceRequest).retrieve()
+                .onStatus(HttpStatusCode::isError, (req, res) -> {
+                    throw new RestClientApiException(res.getStatusCode(), ExceptionTypeEnum.REST_API_ERROR, new String(res.getBody().readAllBytes()));
+                }).body(PenPayData.class);
 
-        final List<Plan> planInfoList = accountsList.stream()
-                .filter(account -> (CrspConstants.SAVINGS.equalsIgnoreCase(account.getPlanType()) || BooleanUtils.isFalse(account.isVoyaAccessPlan())))
-                .map(acct -> {
-                            Plan plan = new Plan();
-                            BeanUtils.copyProperties(acct, plan);
-                            return plan;
-                        }
-                )
-                .collect(Collectors.toList());
-        List<Plan> plansList = filterPlans(planInfoList, preAuthHeadersMap);
-        List<ComboCorresInfo> comboMailList = null;
-        if (!CollectionUtils.isEmpty(plansList)) {
-            log.debug("getMailitArchiveDocsList() participant = {}  belonging to client = {} has saving plan list size = {}",
-                    partyInfo.getSsn(), partyInfo.getClientId(), planInfoList.size());
-            try {
-                comboMailList = buildMailItArchiveDocsList(partyInfo, plansList);
-            } catch (Exception e) {
-                log.error("Error retrieving the Docs from DocArchive", e);
-            }
-
-        } else {
-            log.debug("getMailitArchiveDocsList() participant = {}  belonging to client = {} " + " has saving plan list size = null or 0 ",
-                    partyInfo.getSsn(), partyInfo.getClientId());
-        }
-
-
-        CorrespondenceResponse correspondenceResponse = CorrespondenceResponse.builder().usePlanLvlBrand(setPlanLvlBrandFlg(partyInfo))
-                .comboCorresInfos(comboMailList).build();
-        log.info("<<< Get correspondence Docs for response::{}", correspondenceResponse);
-        return correspondenceResponse;
+        return result;
     }
-
-    private List<ComboCorresInfo> buildMailItArchiveDocsList(final PartyInfo partyInfo, final List<Plan> planList) {
-        log.info(">>> invoking mailIt and archive service");
-        Client client = setItPullClientCache.getClient(partyInfo.getClientId());
-
-        boolean doesIncludeMigrated = true;
-        if (ConfirmSourceType.CEDARARCHIVEECOR.name().equalsIgnoreCase(client.getConfirmSource())) {
-            doesIncludeMigrated = false;
-        }
-        log.debug("buildMailitArchiveDocsList(): Get documents for ParticipantId [{}] clientId [{}] includeMigrated [{}]",
-                FormatUtil.getParticipantMasked(partyInfo.getSsn()), client.getClientId(), doesIncludeMigrated);
-
-        List<ArchiveDocsInfo> archiveDocsInfoList = null;
-        MailFolder mailFolder = null;
-        try {
-            List<String> planIds = planList.stream().map(Plan::getPlanId).collect(Collectors.toList());
-            StopWatch docArchiveStopWatch = new StopWatch();
-            docArchiveStopWatch.start();
-            // Get confirm documents from DocArchive location
-            boolean finalDoesIncludeMigrated = doesIncludeMigrated;
-            List<CompletableFuture<List<ArchiveDocsInfo>>> completableFutureArchiveDocList =
-                    planList.stream().map(plan -> CompletableFuture.supplyAsync(() ->
-                            archiveDocsRestService.getEaseCorrespondenceDocList(partyInfo.getSsn(), plan, finalDoesIncludeMigrated), correspondenceExecutor))
-                            .collect(Collectors.toList());
-
-            archiveDocsInfoList = completableFutureArchiveDocList.stream().flatMap(completableFuture -> completableFuture.join().stream())
-                    .collect(Collectors.toList());
-            log.info("Response Archive docs :: {}", archiveDocsInfoList);
-
-            if (docArchiveStopWatch.isRunning()) {
-                docArchiveStopWatch.stop();
-                log.debug("build Mailit ArchiveDocsList(): {} Processed docarchive " +
-                                "future successfully in {} s",
-                        Thread.currentThread().getName(), docArchiveStopWatch.getTotalTimeSeconds());
-            }
-
-            // Get confirm documents from netApp location
-            StopWatch mailItStopWatch = new StopWatch();
-            mailItStopWatch.start();
-            CompletableFuture<MailFolder> mailFolderCompletableFuture = invokeMailIt(client.getClientId(), partyInfo.getSsn(), planIds, doesIncludeMigrated);
-
-            log.debug("buildMailitArchiveDocsList(): Processing response for ParticipantId [{}] clientId [{}]",
-                    FormatUtil.getParticipantMasked(partyInfo.getSsn()), client.getClientId());
-            mailFolder = mailFolderCompletableFuture.get();
-
-            log.info("Response mail Info {}", mailFolder);
-            if (mailItStopWatch.isRunning()) {
-                mailItStopWatch.stop();
-                log.debug("build Mailit ArchiveDocsList(): {} Processed netapp future " +
-                                "successfully in {} s",
-                        Thread.currentThread().getName(), mailItStopWatch.getTotalTimeSeconds());
-            }
-        } catch (InterruptedException iex) {
-            log.error("Interrupted {}", iex.getMessage(), iex);
-            Thread.currentThread().interrupt();
-        } catch (Exception exc) {
-            throw new RestClientApiException(ExceptionTypeEnum.SERVICE_ERROR, "Exception while processing docArchive/Mailit", exc);
-        }
-
-        List<ComboCorresInfo> comboCorrespondenceInfoList = makeComboMailBox(planList, archiveDocsInfoList, mailFolder);
-        log.info("<<< invoking mailIt and archive service combine response {}", comboCorrespondenceInfoList);
-        return comboCorrespondenceInfoList;
-    }
-
-    private CompletableFuture<MailFolder> invokeMailIt(String clientId, String participantId, List<String> planIds, boolean finalDoesIncludeMigrated) {
-        log.debug("build Mailit Archive DocsList(): Processing to fetch NetApp server " +
-                        "List for ParticipantId [{}] clientId [{}]",
-                FormatUtil.getParticipantMasked(participantId), clientId);
-        CompletableFuture<MailFolder> mailFolderCompletableFuture;
-        if (finalDoesIncludeMigrated) {
-            mailFolderCompletableFuture = CompletableFuture.supplyAsync(() -> mailItPreferenceService.getCombinedMailFolder(clientId, participantId, planIds,
-                    DocumentType.PREFILLED, DocumentType.CONFIRM, DocumentType.EDELIVERYUPDATE), correspondenceExecutor);
-        } else {
-            mailFolderCompletableFuture = CompletableFuture.supplyAsync(() -> mailItPreferenceService.getCombinedMailFolder(clientId, participantId, planIds,
-                    DocumentType.CONFIRM, DocumentType.EDELIVERYUPDATE), correspondenceExecutor);
-        }
-        return mailFolderCompletableFuture;
-    }
-
-
-    private List<ComboCorresInfo> makeComboMailBox(List<Plan> planList, List<ArchiveDocsInfo> archiveDocInfoList, MailFolder mdoc) {
-        List<ComboCorresInfo> comboList = new ArrayList<>();
-
-        if (CollectionUtils.isNotEmpty(archiveDocInfoList)) {
-            archiveDocInfoList.forEach(doc -> {
-                ComboCorresInfo comboCorresInfo = ComboCorresInfo.builder().isMailIt(Boolean.FALSE).planNo(doc.getPlanNo()).planName(doc.getPlanName())
-                        .docCode(doc.getSysDocName()).documentName(doc.getUserDocName()).runDate(doc.getRunDate()).transactionDate(doc.getTransactionDate())
-                        .docQueryParamName(doc.getDocQueryParamName()).docQueryParamValue(doc.getDocQueryParamValue()).docViewURL(doc.getDocViewURL()).build();
-                comboList.add(comboCorresInfo);
-            });
-        }
-
-        if (mdoc != null && CollectionUtils.isNotEmpty(mdoc.getMailInfo())) {
-            for (MailInfo mInfo : mdoc.getMailInfo()) {
-                SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
-                String transactionDate = sdf.format(mInfo.getBeginDate().toGregorianCalendar().getTime());
-                if (mInfo.getDocumentInfo() != null) {
-                    for (DocumentInfo doc : mInfo.getDocumentInfo()) {
-                        ComboCorresInfo comboCorresInfo = ComboCorresInfo.builder().isMailIt(Boolean.TRUE)
-                                .planNo(doc.getPlanId()).planName(getPlanName(planList, doc.getPlanId()))
-                                .docCode(doc.getSysDocName()).documentName(doc.getUserDocName()).transactionDate(transactionDate)
-                                .messageId(doc.getMessageId()).documentId(doc.getDocumentId()).build();
-                        comboList.add(comboCorresInfo);
-                    }
-                }
-            }
-
-        }
-        if (!comboList.isEmpty()) {
-            Collections.sort(comboList);
-        }
-        log.info("<<< Returns combine correspondence doc list::{}", comboList);
-        return Collections.unmodifiableList(comboList);
-    }
-
-    private String getPlanName(List<Plan> planList, String planId) {
-        return planList.stream().filter(plan -> plan.getPlanId().equalsIgnoreCase(planId)).
-                map(Plan::getPlanName).findFirst().orElse(StringUtils.EMPTY);
-    }
-
-    private List<Plan> filterPlans(List<Plan> planInfoList, Map<String, String> preAuthHeadersMap) {
-        log.info(">>> filter plans for plan list:: {}", planInfoList);
-        if (MapUtils.isNotEmpty(preAuthHeadersMap) && CrspConstants.SPSRWB.equalsIgnoreCase(preAuthHeadersMap.get(CrspConstants.UC_VENDOR_ID))
-                && StringUtils.isNotBlank(preAuthHeadersMap.get(CrspConstants.UC_PLAN_ID_LIST))) {
-            log.info("Request from sponsor web {}", preAuthHeadersMap);
-            List<String> globalPlanList = List.of(StringUtils.split(preAuthHeadersMap.get(CrspConstants.UC_PLAN_ID_LIST), ","));
-            planInfoList = planInfoList.stream().filter(plan -> globalPlanList.contains(plan.getPlanId())).collect(Collectors.toList());
-        }
-        log.info("<<< filter plans for plan list response ::{}", planInfoList);
-        return planInfoList;
-    }
-
-    public boolean setPlanLvlBrandFlg(final PartyInfo partyInfo) {
-        List<String> planList = clientParticipantInfoCache.getAllPlansByClientParticipantControlType(partyInfo.getClientId(), partyInfo.getSsn(),
-                ControlType.WEB);
-        if (CollectionUtils.isNotEmpty(planList)) {
-            Plan plan = Plan.builder().clientId(partyInfo.getClientId())
-                    .planId(planList.get(0)).build();
-            PlanGeneralInfo planGeneralInfo = setItPullClientCache.getSetItPlanGeneralInfo(plan);
-            return "Y".equalsIgnoreCase(planGeneralInfo.getUsePlanLevelCustomBranding());
-        }
-        return false;
-    }
-
 }
+
