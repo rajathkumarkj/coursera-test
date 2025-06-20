@@ -60,3 +60,4 @@ class PenPayServiceTest {
                 penPayService.getPaymentHistory("client1", "participant1"));
     }
 }
+https://integration-talentcentral.eu.shl.com/Integration/ce/479cac08457c42d5b6e7fa026be46675/?rid=225614065
