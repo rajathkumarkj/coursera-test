@@ -66,3 +66,6 @@ void testFilterPlans_WithAllConditionsMet() throws Exception {
     assertTrue(hasPlan2, "plan2 should be included.");
     assertFalse(hasPlan3, "plan3 should not be included.");
 }
+
+
+https://doselect.com/gateways/test?access_code=JYWlESOWujrNPLpEp/N6g4gTosOEomVnEqXN3Ww3nz6aEvAbAMWIqYFPk%2BogDhPn&metadata=None
