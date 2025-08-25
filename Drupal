@@ -1,0 +1,29 @@
+package com.example.documents.controller;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+@RestController
+public class DocumentTypeController {
+
+    @GetMapping("/api/document-types")
+    public Map<String, Object> getDocumentTypes() {
+
+        // Static key-value pairs
+        Map<String, String> documentTypes = new LinkedHashMap<>();
+        documentTypes.put("STATEMENTS", "Statements");
+        documentTypes.put("TAX_DOCS", "Tax Documents");
+        documentTypes.put("TRADE_CONF", "Trade Confirmations");
+        documentTypes.put("PROSPECTUSES", "Prospectuses");
+        documentTypes.put("SH_COMM", "Shareholder Communications / Proxy");
+        documentTypes.put("NOTIFICATIONS", "Notifications");
+
+        return Map.of(
+                "default", "STATEMENTS",   // default selection
+                "values", documentTypes
+        );
+    }
+}
