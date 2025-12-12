@@ -1,0 +1,40 @@
+import com.voya.pptcrsp.exception.ExceptionTypeEnum;
+import com.voya.pptcrsp.exception.RestClientApiException;
+import com.voya.pptcrsp.tf.domain.PenPayData;
+import com.voya.pptcrsp.tf.domain.PenPayServiceRequest;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+
+@Slf4j
+@Service
+public class PenPayService {
+    final static String DEFAULT_PLAN_ID_NAME = "PENPAY";
+    final static String DEFAULT_PLAN_TYPE = "PEN_PAY";
+    private static final String DATE_FORMAT = "MMddyyyy";
+    private static final String DISPLAY_DATE_FORMAT = "MM/dd/yyyy";
+    private static final int WRONG_DATE_DIGIT = 7;
+    private final String penpayServiceUrl;
+    private final RestClient restClient;
+
+    public PenPayService(final RestClient restClient, @Value("${penpay.service.url}") final String serviceUrl) {
+        this.penpayServiceUrl = serviceUrl;
+        this.restClient = restClient;
+    }
+
+    public PenPayData getPaymentHistory(String clientId, String participantId) {
+        PenPayServiceRequest penpayServiceRequest = new PenPayServiceRequest();
+        penpayServiceRequest.setClientId(clientId);
+        penpayServiceRequest.setParticipantId(participantId);
+        PenPayData result = restClient.post().uri(penpayServiceUrl).body(penpayServiceRequest).retrieve()
+                .onStatus(HttpStatusCode::isError, (req, res) -> {
+                    throw new RestClientApiException(res.getStatusCode(), ExceptionTypeEnum.REST_API_ERROR, new String(res.getBody().readAllBytes()));
+                }).body(PenPayData.class);
+
+        return result;
+    }
+}
+

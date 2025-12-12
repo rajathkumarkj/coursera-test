@@ -1,0 +1,63 @@
+import com.voya.pptcrsp.exception.RestClientApiException;
+import com.voya.pptcrsp.tf.domain.PenPayData;
+import com.voya.pptcrsp.tf.domain.PenPayServiceRequest;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.*;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClient.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class PenPayServiceTest {
+
+    @Mock RestClient restClient;
+    @Mock RequestBodyUriSpec postSpec;
+    @Mock RequestBodySpec uriSpec;
+    @Mock RequestHeadersSpec<?> bodySpec;
+    @Mock ResponseSpec responseSpec;
+
+    PenPayService penPayService;
+
+    final String serviceUrl = "http://test-url.com";
+
+    @BeforeEach
+    void setUp() {
+        penPayService = new PenPayService(restClient, serviceUrl);
+    }
+
+    @Test
+    void testGetPaymentHistory_Success() {
+        PenPayData mockResponse = new PenPayData();
+
+        when(restClient.post()).thenReturn(postSpec);
+        when(postSpec.uri(serviceUrl)).thenReturn(uriSpec);
+        when(uriSpec.body(any(PenPayServiceRequest.class))).thenReturn(bodySpec);
+        when(bodySpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+        when(responseSpec.body(PenPayData.class)).thenReturn(mockResponse);
+
+        PenPayData result = penPayService.getPaymentHistory("client1", "participant1");
+
+        assertNotNull(result);
+        verify(restClient).post();
+    }
+
+    @Test
+    void testGetPaymentHistory_Error() {
+        when(restClient.post()).thenReturn(postSpec);
+        when(postSpec.uri(serviceUrl)).thenReturn(uriSpec);
+        when(uriSpec.body(any(PenPayServiceRequest.class))).thenReturn(bodySpec);
+        when(bodySpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.onStatus(any(), any()))
+                .thenThrow(new RestClientApiException(HttpStatusCode.valueOf(500), null, "Server Error"));
+
+        assertThrows(RestClientApiException.class, () ->
+                penPayService.getPaymentHistory("client1", "participant1"));
+    }
+}
+https://integration-talentcentral.eu.shl.com/Integration/ce/479cac08457c42d5b6e7fa026be46675/?rid=225614065

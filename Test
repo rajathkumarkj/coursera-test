@@ -1,0 +1,91 @@
+is@Test
+void testFilterPlans_WithAllConditionsMet() throws Exception {
+    // Set up the preAuthHeadersMap with valid data
+    Map<String, String> preAuthHeadersMap = Map.of(
+        "UC_VENDOR_ID", "SPSRWB", // Vendor ID must match
+        "UC_PLAN_ID_LIST", "plan1,plan2" // Valid plan list
+    );
+    String clientId = "client123";
+
+    // Mock DocumentInfo and MailInfo with different planIds
+    DocumentInfo doc1 = mock(DocumentInfo.class);
+    DocumentInfo doc2 = mock(DocumentInfo.class);
+    DocumentInfo doc3 = mock(DocumentInfo.class);
+
+    when(doc1.getPlanId()).thenReturn("plan1"); // Valid planId from the map
+    when(doc2.getPlanId()).thenReturn("plan3"); // Invalid planId
+    when(doc3.getPlanId()).thenReturn("plan2"); // Valid planId from the map
+
+    // Mock MailInfo containing the DocumentInfo objects
+    MailInfo mailInfo = mock(MailInfo.class);
+    when(mailInfo.getDocumentInfo()).thenReturn(List.of(doc1, doc2, doc3));
+
+    List<MailInfo> mailInfoList = List.of(mailInfo);
+
+    // Access private method filterPlans using reflection
+    Method filterPlansMethod = MailItConfirmCorrespondenceService.class.getDeclaredMethod(
+        "filterPlans", List.class, Map.class, String.class
+    );
+    filterPlansMethod.setAccessible(true);
+
+    // Invoke the private method with reflection
+    List<MailInfo> result = (List<MailInfo>) filterPlansMethod.invoke(service, mailInfoList, preAuthHeadersMap, clientId);
+
+    // Debugging: Print the result to see the filtered mail info list
+    System.out.println("Filtered MailInfo List Size: " + result.size());
+    result.forEach(mailInfoResult -> {
+        System.out.println("MailInfo Document Size: " + mailInfoResult.getDocumentInfo().size());
+        mailInfoResult.getDocumentInfo().forEach(doc -> {
+            System.out.println("Document PlanId: " + doc.getPlanId());
+        });
+    });
+
+    // Verify that only documents with plan1 and plan2 are present
+    assertNotNull(result);
+    assertEquals(1, result.size(), "There should be one MailInfo object remaining.");
+    List<DocumentInfo> filteredDocuments = result.get(0).getDocumentInfo();
+
+    // Debug the filtered documents count and contents
+    System.out.println("Filtered Documents Count: " + filteredDocuments.size()); // Debug size
+
+    // Ensure there are only two valid documents
+    assertEquals(2, filteredDocuments.size(), "There should be exactly two documents with valid plan IDs.");
+
+    // Ensure that the filtered documents contain plan1 and plan2, but not plan3
+    boolean hasPlan1 = filteredDocuments.stream().anyMatch(doc -> "plan1".equals(doc.getPlanId()));
+    boolean hasPlan2 = filteredDocuments.stream().anyMatch(doc -> "plan2".equals(doc.getPlanId()));
+    boolean hasPlan3 = filteredDocuments.stream().anyMatch(doc -> "plan3".equals(doc.getPlanId()));
+
+    // Debug the results
+    System.out.println("Has plan1: " + hasPlan1);
+    System.out.println("Has plan2: " + hasPlan2);
+    System.out.println("Has plan3: " + hasPlan3);
+
+    // Assert that plan1 and plan2 are in the filtered list, and plan3 is not
+    assertTrue(hasPlan1, "plan1 should be included.");
+    assertTrue(hasPlan2, "plan2 should be included.");
+    assertFalse(hasPlan3, "plan3 should not be included.");
+}
+
+
+https://doselect.com/gateways/test?access_code=JYWlESOWujrNPLpEp/N6g4gTosOEomVnEqXN3Ww3nz6aEvAbAMWIqYFPk%2BogDhPn&metadata=None
+https://teams.microsoft.com/l/meetup-join/19%3ameeting_OWUzMGZhZGItY2Y3NC00NDVjLWIwNjYtZDNmYWQ1NzZjOGUw%40thread.v2/0?context=%7b%22Tid%22%3a%22f24a44fc-215b-4dd5-8033-4a223357d1c9%22%2c%22Oid%22%3a%226899b6f6-83ca-4f0b-9957-86fcb36cb570%22%7d
+https://teams.microsoft.com/l/meetup-join/19%3ameeting_NmRjZWViMTItMTEwMC00YzhkLTkzYWItNDc2NDJiMDBkMjNh%40thread.v2/0?context=%7b%22Tid%22%3a%22f24a44fc-215b-4dd5-8033-4a223357d1c9%22%2c%22Oid%22%3a%224c21a572-415d-42b9-a366-771cfeb2ddec%22%7d
+
+https://amcatglobal.aspiringminds.com/?autoLoginVersion=3&token=eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiIxMDAxIiwiYXVkIjoiaHR0cHM6XC9cL2FtY2F0YXBpLmFzcGlyaW5nbWluZHMuY29tXC8iLCJpYXQiOjE3NTM1MzYwNTEsIm5iZiI6MTc1MzUzNTgyMCwiZXhwIjoxNzYxNjc2MTQwLCJsb2dpbiI6eyJsYW5ndWFnZSI6ImVuLVVTIiwidW5pcXVlSUQiOiI4MzczNTYwOCIsInJlZ2lvbiI6IlVTIiwiaXNBdXRvbG9naW4iOjEsInJldHVyblVybCI6IiJ9fQ.Iy_D2rD0sfEhXijm_tFAQJUU_xXui0H-y181o-unIngKX8LwoOKtAY9RpC3VvUkiSTmxCU9X-6_OJ84_A1I_9Q
+
+
+Accenture -> Job No. ATCI-4893854-S1876693 
+Job No. ATCI-5066091-S1876419 
+
+
+https://hr.gs/kpmg-java
+
+
+https://integration-talentcentral.eu.shl.com/Integration/ce/865527f17c7e47219bc139c249fc51dc/?rid=1609036219
+
+
+
+
+
+https://track.pstmrk.it/3s/www.hackerrank.com%2Ftests%2F9ehq12lpe00%2Flogin%3Fb%3DeyJ1c2VybmFtZSI6InJhamF0aGs5MDZAZ21haWwuY29tIiwicGFzc3dvcmQiOiJhZGI1Y2VkMSIsImhpZGUiOnRydWUsImFjY29tbW9kYXRpb25zIjp7ImFkZGl0aW9uYWxfdGltZV9wZXJjZW50IjowfX0%3D/EDcI/HEzAAQ/AQ/8801f03c-61bc-49ba-9fbd-890f78136202/1/sWIfcYKjwh
